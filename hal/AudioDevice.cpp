@@ -35,7 +35,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -697,10 +697,10 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     /* This check is added for oflload streams, so that
      * flinger will fallback to DB stream during SSR.
      */
-    if (AudioDevice::sndCardState == CARD_STATUS_OFFLINE &&
+    if (PAL_CARD_STATUS_DOWN(AudioDevice::sndCardState) &&
         (flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD ||
         flags & AUDIO_OUTPUT_FLAG_DIRECT)) {
-        AHAL_ERR("error: sound card offline");
+        AHAL_ERR("error: sound card offline/standby");
         ret = -ENODEV;
         goto exit;
     }
