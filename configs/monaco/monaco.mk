@@ -110,6 +110,9 @@ AUDIO_AGM += agmcompressplay
 AUDIO_AGM += libagm_mixer_plugin
 AUDIO_AGM += libagm_pcm_plugin
 AUDIO_AGM += libagm_compress_plugin
+AUDIO_AGM += agmcompresscap
+AUDIO_AGM += agmvoiceui
+AUDIO_AGM += agmhostless
 
 #PAL Module
 AUDIO_PAL := libar-pal
@@ -178,6 +181,12 @@ PRODUCT_PACKAGES += IDP_acdb_cal_monaco_amic.acdb
 PRODUCT_PACKAGES += IDP_workspaceFileXml_monaco_amic.qwsp
 PRODUCT_PACKAGES += IDP_acdb_cal_monaco_wsa.acdb
 PRODUCT_PACKAGES += IDP_workspaceFileXml_monaco_wsa.qwsp
+
+PRODUCT_PACKAGES += mm-audio-ftm
+PRODUCT_PACKAGES += libvui_dmgr
+PRODUCT_PACKAGES += libvui_dmgr_client
+PRODUCT_PACKAGES += qsap_voiceui
+PRODUCT_PACKAGES += qsap_voiceui.policy
 
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_MCS)), true)
  PRODUCT_PACKAGES += libmcs
@@ -630,6 +639,11 @@ PRODUCT_PACKAGES += \
 # enable sound trigger hidl hal 2.3
 PRODUCT_PACKAGES += \
     android.hardware.soundtrigger@2.3-impl \
+
+# enable Listen Sound Model hidl 1.0
+PRODUCT_PACKAGES += \
+    vendor.qti.hardware.ListenSoundModel@1.0 \
+    vendor.qti.hardware.ListenSoundModel@1.0-impl
 
 PRODUCT_PACKAGES_ENG += \
     VoicePrintTest \
