@@ -258,9 +258,12 @@ endif
 
 PRODUCT_PACKAGES += $(AUDIO_DLKM)
 
+DEVICE_SKU := monaco
+
 CONFIG_PAL_SRC_DIR := $(TOPDIR)$(BOARD_OPENSOURCE_DIR)/pal/configs/monaco
 CONFIG_HAL_SRC_DIR := $(TOPDIR)$(BOARD_OPENSOURCE_DIR)/audio-hal/primary-hal/configs/monaco
 CONFIG_HAL_COMMON_SRC_DIR := $(TOPDIR)$(BOARD_OPENSOURCE_DIR)/audio-hal/primary-hal/configs/common
+CONFIG_SKU_OUT_DIR := $(TARGET_COPY_OUT_VENDOR)/etc/audio/sku_$(DEVICE_SKU)
 
 ifneq ($(strip $(TARGET_USES_RRO)), true)
 #Audio Specific device overlays
@@ -273,30 +276,30 @@ PRODUCT_PACKAGES += $(AUDIO_C2)
 endif
 
 PRODUCT_COPY_FILES += \
-    $(CONFIG_HAL_SRC_DIR)/audio_io_policy.conf:$(TARGET_COPY_OUT_VENDOR)/etc/audio_io_policy.conf \
-    $(CONFIG_HAL_SRC_DIR)/audio_effects.conf:$(TARGET_COPY_OUT_VENDOR)/etc/audio_effects.conf \
-    $(CONFIG_HAL_SRC_DIR)/audio_effects.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_effects.xml \
-    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths_monaco_idp.xml \
-    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_amic.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths_monaco_idp_amic.xml \
-    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_wsa.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths_monaco_idp_wsa.xml \
-    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_slate.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths_monaco_idp_slate.xml \
-    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_slate_amic.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths_monaco_idp_slate_amic.xml \
-    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_slate_wsa.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths_monaco_idp_slate_wsa.xml \
+    $(CONFIG_HAL_SRC_DIR)/audio_io_policy.conf:$(CONFIG_SKU_OUT_DIR)/audio_io_policy.conf \
+    $(CONFIG_HAL_SRC_DIR)/audio_effects.conf:$(CONFIG_SKU_OUT_DIR)/audio_effects.conf \
+    $(CONFIG_HAL_SRC_DIR)/audio_effects.xml:$(CONFIG_SKU_OUT_DIR)/audio_effects.xml \
+    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_monaco_idp.xml \
+    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_amic.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_monaco_idp_amic.xml \
+    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_wsa.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_monaco_idp_wsa.xml \
+    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_slate.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_monaco_idp_slate.xml \
+    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_slate_amic.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_monaco_idp_slate_amic.xml \
+    $(CONFIG_HAL_SRC_DIR)/mixer_paths_monaco_idp_slate_wsa.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_monaco_idp_slate_wsa.xml \
     $(CONFIG_HAL_SRC_DIR)/audio_configs.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_configs.xml \
     $(CONFIG_HAL_SRC_DIR)/audio_configs_stock.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_configs_stock.xml \
     frameworks/native/data/etc/android.hardware.audio.pro.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.audio.pro.xml \
-    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp.xml:$(TARGET_COPY_OUT_VENDOR)/etc/resourcemanager_monaco_idp.xml \
-    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_amic.xml:$(TARGET_COPY_OUT_VENDOR)/etc/resourcemanager_monaco_idp_amic.xml \
-    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_wsa.xml:$(TARGET_COPY_OUT_VENDOR)/etc/resourcemanager_monaco_idp_wsa.xml \
-    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_slate.xml:$(TARGET_COPY_OUT_VENDOR)/etc/resourcemanager_monaco_idp_slate.xml \
-    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_slate_amic.xml:$(TARGET_COPY_OUT_VENDOR)/etc/resourcemanager_monaco_idp_slate_amic.xml \
-    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_slate_wsa.xml:$(TARGET_COPY_OUT_VENDOR)/etc/resourcemanager_monaco_idp_slate_wsa.xml \
+    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_monaco_idp.xml \
+    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_amic.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_monaco_idp_amic.xml \
+    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_wsa.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_monaco_idp_wsa.xml \
+    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_slate.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_monaco_idp_slate.xml \
+    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_slate_amic.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_monaco_idp_slate_amic.xml \
+    $(CONFIG_PAL_SRC_DIR)/resourcemanager_monaco_idp_slate_wsa.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_monaco_idp_slate_wsa.xml \
     $(CONFIG_PAL_SRC_DIR)/usecaseKvManager.xml:$(TARGET_COPY_OUT_VENDOR)/etc/usecaseKvManager.xml \
     $(CONFIG_HAL_SRC_DIR)/card-defs.xml:$(TARGET_COPY_OUT_VENDOR)/etc/card-defs.xml
 
 ifeq ($(AUDIO_FEATURE_ENABLED_MCS),true)
 PRODUCT_COPY_FILES += \
-    $(CONFIG_HAL_SRC_DIR)/mcs_defs_monaco_idp_slate.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mcs_defs_monaco_idp_slate.xml
+    $(CONFIG_HAL_SRC_DIR)/mcs_defs_monaco_idp_slate.xml:$(CONFIG_SKU_OUT_DIR)/mcs_defs_monaco_idp_slate.xml
 endif
 
 #XML Audio configuration files
@@ -306,10 +309,10 @@ PRODUCT_COPY_FILES += \
 endif
 ifeq ($(TARGET_SUPPORTS_WEAR_OS), true)
 PRODUCT_COPY_FILES += \
-    $(CONFIG_HAL_SRC_DIR)/audio_policy_configuration_lw.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy_configuration.xml
+    $(CONFIG_HAL_SRC_DIR)/audio_policy_configuration_lw.xml:$(CONFIG_SKU_OUT_DIR)/audio_policy_configuration.xml
 else
 PRODUCT_COPY_FILES += \
-    $(CONFIG_HAL_COMMON_SRC_DIR)/audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy_configuration.xml
+    $(CONFIG_HAL_COMMON_SRC_DIR)/audio_policy_configuration.xml:$(CONFIG_SKU_OUT_DIR)/audio_policy_configuration.xml
 endif
 PRODUCT_COPY_FILES += \
     $(TOPDIR)frameworks/av/services/audiopolicy/config/a2dp_audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/a2dp_audio_policy_configuration.xml \
