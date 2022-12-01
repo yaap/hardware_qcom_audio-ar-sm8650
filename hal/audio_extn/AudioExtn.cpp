@@ -684,18 +684,18 @@ feature_disabled:
 // END: A2DP
 
 // START: DEVICE UTILS =============================================================
-bool AudioExtn::audio_devices_cmp(const std::set<audio_devices_t>& devs, audio_device_cmp_fn_t fn){
+bool AudioExtn::audio_devices_cmp(const std::set<audio_devices_t>& devs, audio_device_cmp_fn_t fn) {
     for(auto dev : devs)
-        if(!fn(dev))
-            return false;
-    return true;
+        if(fn(dev))
+            return true;
+    return false;
 }
 
-bool AudioExtn::audio_devices_cmp(const std::set<audio_devices_t>& devs, audio_devices_t dev){
+bool AudioExtn::audio_devices_cmp(const std::set<audio_devices_t>& devs, audio_devices_t dev) {
     for(auto d : devs)
-        if(d != dev)
-            return false;
-    return true;
+        if(d == dev)
+            return true;
+    return false;
 }
 
 audio_devices_t AudioExtn::get_device_types(const std::set<audio_devices_t>& devs){
