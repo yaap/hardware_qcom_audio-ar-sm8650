@@ -600,6 +600,21 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
         }
+    } else if (session_type == A2DP_HARDWARE_OFFLOAD_DATAPATH) {
+        if (state == 0) {
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
+            param_bt_a2dp.a2dp_suspended = true;
+            param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+
+            ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
+                                sizeof(pal_param_bta2dp_t));
+        } else if (state == 1) {
+            param_bt_a2dp.a2dp_suspended = false;
+            param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+
+            ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
+                                sizeof(pal_param_bta2dp_t));
+        }
     }
     AHAL_ERR("reconfig_cb exit");
     return ret;
