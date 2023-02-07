@@ -566,11 +566,13 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
     int ret = 0;
     pal_param_bta2dp_t param_bt_a2dp;
     AHAL_DBG("reconfig_cb enter");
-    if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH) {
 
-        /* If reconfiguration is in progress state, we do a2dp suspend.
-         * If reconfiguration is in complete state, we do a2dp resume.
-         */
+    /* If reconfiguration is in progress state (state = 0), perform a2dp suspend.
+     * If reconfiguration is in complete state (state = 1), perform a2dp resume.
+     * Set LC3 channel mode as mono (state = 2).
+     * Set LC3 channel mode as stereo (state = 3).
+     */
+    if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH) {
         if (state == 0) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
@@ -584,6 +586,14 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
+        } else if (state == 2) {
+            param_bt_a2dp.is_lc3_mono_mode_on = true;
+            ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_LC3_CONFIG, (void*)&param_bt_a2dp,
+                sizeof(pal_param_bta2dp_t));
+        } else if (state == 3) {
+            param_bt_a2dp.is_lc3_mono_mode_on = false;
+            ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_LC3_CONFIG, (void*)&param_bt_a2dp,
+                sizeof(pal_param_bta2dp_t));
         }
     } else if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH) {
         if (state == 0) {
