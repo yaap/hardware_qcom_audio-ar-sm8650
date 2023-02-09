@@ -110,45 +110,104 @@ const std::map<int32_t, std::string> reconfigStateName{
     {CHANNEL_STEREO,  std::string{"CHANNEL_STEREO"}},
 };
 // start of CompressCapture
-class CompressCapture {
+namespace CompressCapture {
+class CompressAAC {
    public:
     constexpr static const char *kAudioParameterDSPAacBitRate =
         "dsp_aac_audio_bitrate";
-    static const uint32_t kAacPCMSamplesPerFrame = 1024;
+    constexpr static const char *kAudioParameterDSPAacGlobalCutoffFrequency =
+        "dsp_aac_audio_global_cutoff_frequency";
+    static const uint32_t kAacLcPCMSamplesPerFrame = 1024;
+    static const uint32_t kHeAacPCMSamplesPerFrame = 2048;
 
-    // min and max bitrates supported for AAC mono and stereo
-    static const int32_t kAacMonoMinSupportedBitRate = 8000;
-    static const int32_t kAacStereoMinSupportedBitRate = 16000;
+    enum EncodingMode {
+        LC = 0x02,
+        SBR = 0x05,
+        PS = 0x1D,
+    };
+    enum EncodingFormat {
+        ADTS = 0x00,
+        LOAS = 0x01,
+        RAW = 0x03,
+        LATM = 0x04,
+    };
 
-    static const int32_t kAacMonoMaxSupportedBitRate = 192000;
-    static const int32_t kAacStereoMaxSupportedBitRate = 384000;
+    constexpr static int32_t kAacLcMonoMinSupportedBitRate = 8000;
+    constexpr static int32_t kAacLcStereoMinSupportedBitRate = 16000;
+    constexpr static int32_t kHeAacMonoMinSupportedBitRate1 = 10000;
+    constexpr static int32_t kHeAacMonoMinSupportedBitRate2 = 12000;
+    constexpr static int32_t kHeAacStereoMinSupportedBitRate1 = 18000;
+    constexpr static int32_t kHeAacStereoMinSupportedBitRate2 = 24000;
+    constexpr static int32_t kHeAacPsStereoMinSupportedBitRate1 = 10000;
+    constexpr static int32_t kHeAacPsStereoMinSupportedBitRate2 = 12000;
 
-    static std::vector<uint32_t> sAacSampleRates;
-    static std::unordered_map<uint32_t, int32_t> sSampleRateToDefaultBitRate;
+    constexpr static int32_t kAacLcMonoMaxSupportedBitRate = 192000;
+    constexpr static int32_t kAacLcStereoMaxSupportedBitRate = 384000;
+    constexpr static int32_t kHeAacMonoMaxSupportedBitRate = 192000;
+    constexpr static int32_t kHeAacStereoMaxSupportedBitRate = 192000;
+    constexpr static int32_t kHeAacPstereoMaxSupportedBitRate = 192000;
 
-    static bool parseMetadata(str_parms *parms, struct audio_config *config,
-                              int32_t &compressStreamAdjBitRate);
+    static const uint32_t KAacMaxOutputSize = 2048; // bytes
 
-    static bool getAACMinBitrateValue(uint32_t sampleRate,
-                                      uint32_t channelCount, int32_t &minValue);
 
-    static bool getAACMaxBitrateValue(uint32_t sampleRate,
-                                      uint32_t channelCount, int32_t &maxValue);
+    static const int32_t kAacDefaultBitrate = 36000; // bps
 
-    static bool getAACMaxBufferSize(struct audio_config *config,
-                                    uint32_t &maxBufSize);
+    int32_t getAACMinBitrateValue();
 
-    CompressCapture() = delete;
-    ~CompressCapture() = delete;
+    int32_t getAACMaxBitrateValue();
 
-    CompressCapture(const CompressCapture&) = delete;
-    CompressCapture(CompressCapture&&) = delete;
+    bool setParameters(str_parms *parms);
+    bool getParameters(struct str_parms *query, struct str_parms *reply);
+    bool configure(pal_stream_handle_t *palHandle);
+    bool setDSPBitRate(int32_t bitRate);
+    uint32_t getPCMSamplesPerFrame() const { return mPCMSamplesPerFrame; }
+    uint64_t getFramesRead() const {
+        return mCompressReadCalls * mPCMSamplesPerFrame;
+    }
 
-    CompressCapture& operator=(const CompressCapture&) = delete;
-    CompressCapture& operator=(CompressCapture&&) = delete;
+    uint32_t getAACMaxBufferSize();
+
+    explicit CompressAAC(audio_format_t format, uint32_t sampleRate,
+                         uint32_t channelCount)
+        : mFormat(format),
+          mSampleRate(sampleRate),
+          mChannelCount(channelCount),
+          mIsConfigured(false),
+          mPCMSamplesPerFrame(format == AUDIO_FORMAT_AAC_LC
+                                  ? kAacLcPCMSamplesPerFrame
+                                  : kHeAacPCMSamplesPerFrame),
+          mCompressStreamAdjBitRate(-1),
+          mCutoffFrequency(-1),
+          mCompressReadCalls(0),
+          mEncoderModuleId(0),
+          mPalHandle(0) {}
+
+    ~CompressAAC() = default;
+
+    CompressAAC(const CompressAAC &) = default;
+    CompressAAC(CompressAAC &&) = default;
+
+    CompressAAC &operator=(const CompressAAC &) = default;
+    CompressAAC &operator=(CompressAAC &&) = default;
+
+    /**
+     * number of successful compress read calls
+     * correlate to number of PCM frames read in
+     * compress record usecase
+     * */
+    uint64_t mCompressReadCalls;
+    int32_t mCompressStreamAdjBitRate;
+    int32_t mCutoffFrequency;
+    bool mIsConfigured;
+    uint32_t mSampleRate;
+    uint32_t mChannelCount;
+    uint32_t mEncoderModuleId;
+    uint32_t mPCMSamplesPerFrame;
+    audio_format_t mFormat;
+    pal_stream_handle_t mPalHandle;
 };
+}  // namespace CompressCapture
 // end of CompressCapture
-
 
 class AudioExtn
 {

@@ -28,7 +28,7 @@
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -650,18 +650,10 @@ protected:
     audio_source_t                      source_;
     friend class AudioDevice;
     uint64_t mBytesRead = 0; /* total bytes read, not cleared when entering standby */
-    /**
-     * number of successful compress read calls
-     * correlate to number of PCM frames read in
-     * compress record usecase
-     * */
-    uint64_t mCompressReadCalls = 0;
-    int32_t mCompressStreamAdjBitRate;
-    bool mIsBitRateSet =false;
-    bool mIsBitRateGet = false;
+    // for compress capture usecase
+    std::unique_ptr<CompressCapture::CompressAAC> mCompressEncoder;
     bool isECEnabled = false;
     bool isNSEnabled = false;
     bool effects_applied_ = true;
-    pal_snd_enc_t palSndEnc{};
 };
 #endif  // ANDROID_HARDWARE_AHAL_ASTREAM_H_

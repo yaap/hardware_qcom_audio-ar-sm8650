@@ -1356,8 +1356,7 @@ uint64_t StreamInPrimary::GetFramesRead(int64_t* time)
         /**
          * TODO get num of pcm frames from below layers
          **/
-        signed_frames =
-            mCompressReadCalls * COMPRESS_CAPTURE_AAC_PCM_SAMPLES_IN_FRAME;
+        signed_frames = mCompressEncoder->getFramesRead();
     } else {
         signed_frames = mBytesRead / audio_bytes_per_frame(
         audio_channel_count_from_in_mask(config_.channel_mask),
@@ -4433,27 +4432,8 @@ done:
 bool StreamInPrimary::getParameters(struct str_parms *query,
                                     struct str_parms *reply) {
     bool found = false;
-    char value[256];
-
     if (usecase_ == USECASE_AUDIO_RECORD_COMPRESS) {
-        if (config_.format == AUDIO_FORMAT_AAC_LC ||
-            config_.format == AUDIO_FORMAT_AAC_ADTS_LC ||
-            config_.format == AUDIO_FORMAT_AAC_ADTS_HE_V1 ||
-            config_.format == AUDIO_FORMAT_AAC_ADTS_HE_V2) {
-            // query for AAC bitrate
-            if (str_parms_get_str(query,
-                                  CompressCapture::kAudioParameterDSPAacBitRate,
-                                  value, sizeof(value)) >= 0) {
-                value[0] = '\0';
-                // fill in the AAC bitrate
-                if (mIsBitRateSet &&
-                    (str_parms_add_int(
-                         reply, CompressCapture::kAudioParameterDSPAacBitRate,
-                         mCompressStreamAdjBitRate) >= 0)) {
-                    mIsBitRateGet = found = true;
-                }
-            }
-        }
+        found = mCompressEncoder->getParameters(query, reply);
     }
 
     return found;
@@ -4463,6 +4443,7 @@ int StreamInPrimary::SetParameters(const char* kvpairs) {
     struct str_parms *parms = (str_parms *)NULL;
     int ret = 0;
 
+    stream_mutex_.lock();
     AHAL_DBG("enter: kvpairs: %s", kvpairs);
     if(!mInitialized)
         goto exit;
@@ -4472,15 +4453,15 @@ int StreamInPrimary::SetParameters(const char* kvpairs) {
         goto exit;
 
     if (usecase_ == USECASE_AUDIO_RECORD_COMPRESS) {
-        if (CompressCapture::parseMetadata(parms, &config_,
-                                           mCompressStreamAdjBitRate)) {
-            mIsBitRateSet = true;
-        }
+        if (!mCompressEncoder->setParameters(parms)) {
+             ret = -EINVAL;
+         }
     }
 
     str_parms_destroy(parms);
 exit:
    AHAL_DBG("exit %d", ret);
+   stream_mutex_.unlock();
    return ret;
 }
 
@@ -4666,65 +4647,10 @@ int StreamInPrimary::Open() {
         goto exit;
     }
 
-    // TODO configure this for any audio format
-    //PAL input compressed stream is used only for compress capture 
-    if (streamAttributes_.type == PAL_STREAM_COMPRESSED) {
-        pal_param_payload *param_payload = nullptr;
-        param_payload = (pal_param_payload *)calloc(
-            1, sizeof(pal_param_payload) + sizeof(pal_snd_enc_t));
-
-        if (!param_payload) {
-            AHAL_ERR("calloc failed for size %zu",
-                     sizeof(pal_param_payload) + sizeof(pal_snd_enc_t));
-        } else {
-            /**
-            * encoder mode
-            0x2       AAC_AOT_LC
-            0x5      AAC_AOT_SBR
-            0x1d      AAC_AOT_PS
-
-            * format flag
-            0x0       AAC_FORMAT_FLAG_ADTS
-            0x1       AAC_FORMAT_FLAG_LOAS
-            0x3       AAC_FORMAT_FLAG_RAW
-            0x4       AAC_FORMAT_FLAG_LATM
-            **/
-            param_payload->payload_size = sizeof(pal_snd_enc_t);
-
-            if (config_.format == AUDIO_FORMAT_AAC_LC ||
-                config_.format == AUDIO_FORMAT_AAC_ADTS_LC) {
-                palSndEnc.aac_enc.enc_cfg.aac_enc_mode = 0x2;
-                palSndEnc.aac_enc.enc_cfg.aac_fmt_flag = 0x00;
-            } else if (config_.format == AUDIO_FORMAT_AAC_ADTS_HE_V1) {
-                palSndEnc.aac_enc.enc_cfg.aac_enc_mode = 0x5;
-                palSndEnc.aac_enc.enc_cfg.aac_fmt_flag = 0x00;
-            } else if (config_.format == AUDIO_FORMAT_AAC_ADTS_HE_V2) {
-                palSndEnc.aac_enc.enc_cfg.aac_enc_mode = 0x1d;
-                palSndEnc.aac_enc.enc_cfg.aac_fmt_flag = 0x00;
-            } else {
-                palSndEnc.aac_enc.enc_cfg.aac_enc_mode = 0x2;
-                palSndEnc.aac_enc.enc_cfg.aac_fmt_flag = 0x00;
-            }
-
-            if (mIsBitRateSet && mIsBitRateGet) {
-                palSndEnc.aac_enc.aac_bit_rate = mCompressStreamAdjBitRate;
-                mIsBitRateSet = mIsBitRateGet = false;
-                AHAL_DBG("compress aac bitrate configured: %d",
-                         palSndEnc.aac_enc.aac_bit_rate);
-            } else {
-                palSndEnc.aac_enc.aac_bit_rate =
-                    CompressCapture::sSampleRateToDefaultBitRate.at(
-                        config_.sample_rate);
-            }
-
-            memcpy(param_payload->payload, &palSndEnc,
-                   param_payload->payload_size);
-
-            ret = pal_stream_set_param(pal_stream_handle_,
-                                       PAL_PARAM_ID_CODEC_CONFIGURATION,
-                                       param_payload);
-            if (ret) AHAL_ERR("Pal Set Param Error (%x)", ret);
-            free(param_payload);
+    if (usecase_ == USECASE_AUDIO_RECORD_COMPRESS) {
+        if (!mCompressEncoder->configure(pal_stream_handle_)) {
+             ret = -EINVAL;
+             goto exit;
         }
     }
 
@@ -4820,8 +4746,8 @@ uint32_t StreamInPrimary::GetBufferSize() {
                         audio_channel_count_from_in_mask(config_.channel_mask),
                         config_.format);
     } else if (streamAttributes_.type == PAL_STREAM_COMPRESSED) {
-        // TODO make this allocation with respect to AUDIO_FORMAT
-        return COMPRESS_CAPTURE_AAC_MAX_OUTPUT_BUFFER_SIZE;
+        // TODO make this allocation with respect to AUDIO FORMAT
+        return CompressCapture::CompressAAC::KAacMaxOutputSize;
     } else {
         /* this else condition will be other stream types like deepbuffer/RAW.. */
         size = (config_.sample_rate * AUDIO_CAPTURE_PERIOD_DURATION_MSEC) /1000;
@@ -4992,7 +4918,7 @@ ssize_t StreamInPrimary::read(const void *buffer, size_t bytes) {
     AHAL_VERBOSE("received size= %d",palBuffer.size);
     if (usecase_ == USECASE_AUDIO_RECORD_COMPRESS && ret > 0) {
         size = palBuffer.size;
-        mCompressReadCalls++;
+        (mCompressEncoder->mCompressReadCalls)++;
     }
     // mute pcm data if sva client is reading lab data
     if (adevice->num_va_sessions_ > 0 &&
@@ -5056,7 +4982,8 @@ StreamInPrimary::StreamInPrimary(audio_io_handle_t handle,
     StreamPrimary(handle, devices, config),
     mAndroidInDevices(devices),
     flags_(flags),
-    btSinkMetadata{0, nullptr}
+    btSinkMetadata{0, nullptr},
+    mCompressEncoder(nullptr)
 {
     stream_ = std::shared_ptr<audio_stream_in> (new audio_stream_in());
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
@@ -5250,13 +5177,37 @@ StreamInPrimary::StreamInPrimary(audio_io_handle_t handle,
     }
 
     usecase_ = GetInputUseCase(flags, source);
+
+    mInitialized = true;
+
+    // compress capture
+    using CompressAAC = CompressCapture::CompressAAC;
+    if (usecase_ == USECASE_AUDIO_RECORD_COMPRESS) {
+        if (config_.format == AUDIO_FORMAT_AAC_LC ||
+            config_.format == AUDIO_FORMAT_AAC_ADTS_HE_V1 ||
+            config_.format == AUDIO_FORMAT_AAC_ADTS_HE_V2) {
+            mCompressEncoder = std::make_unique<CompressAAC>(
+                config_.format, config_.sample_rate,
+                audio_channel_count_from_in_mask(config_.channel_mask));
+            if (!mCompressEncoder) {
+                usecase_ = USECASE_INVALID;
+                AHAL_ERR("memory allocation failed");
+                mInitialized = false;
+            }
+        } else {
+            usecase_ = USECASE_INVALID;
+            AHAL_ERR("invalid usecase detected");
+            mInitialized = false;
+        }
+    }
+
     if (flags & AUDIO_INPUT_FLAG_MMAP_NOIRQ) {
         stream_.get()->start = astream_in_mmap_noirq_start;
         stream_.get()->stop = astream_in_mmap_noirq_stop;
         stream_.get()->create_mmap_buffer = astream_in_create_mmap_buffer;
         stream_.get()->get_mmap_position = astream_in_get_mmap_position;
     }
-    mInitialized = true;
+
 error:
     (void)FillHalFnPtrs();
     AHAL_DBG("Exit");

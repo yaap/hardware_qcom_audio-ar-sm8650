@@ -974,8 +974,10 @@ static size_t adev_get_input_buffer_size(
 
     /* input for compress formats */
     if (config && !audio_is_linear_pcm(config->format)) {
-        if (config->format == AUDIO_FORMAT_AAC_LC) {
-            return COMPRESS_CAPTURE_AAC_MAX_OUTPUT_BUFFER_SIZE;
+        if (config->format == AUDIO_FORMAT_AAC_LC ||
+            config->format == AUDIO_FORMAT_AAC_ADTS_HE_V1 ||
+            config->format == AUDIO_FORMAT_AAC_ADTS_HE_V2) {
+            return CompressCapture::CompressAAC::KAacMaxOutputSize;
         }
         return 0;
     }
