@@ -61,7 +61,6 @@ AUDIO_C2 += c2audio.vendor.ext-arm64.policy
 
 AUDIO_TEST := mcs_test
 AUDIO_TEST += ar_util_in_test_example
-AUDIO_TEST += osal_in_test_example
 
 
 #AUDIO_MODULES := audio.a2dp.default
