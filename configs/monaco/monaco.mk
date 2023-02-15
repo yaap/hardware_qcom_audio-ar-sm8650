@@ -162,6 +162,7 @@ PRODUCT_PACKAGES += $(AUDIO_HARDWARE)
 PRODUCT_PACKAGES += $(AUDIO_WRAPPER)
 PRODUCT_PACKAGES += $(AUDIO_HAL_TEST_APPS)
 PRODUCT_PACKAGES += ftm_test_config
+PRODUCT_PACKAGES += ftm_test_config_monaco-idp-snd-card
 
 PRODUCT_PACKAGES += IDP_acdb_cal_monaco_slate.acdb
 PRODUCT_PACKAGES += IDP_workspaceFileXml_monaco_slate.qwsp
