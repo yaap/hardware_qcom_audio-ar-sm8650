@@ -122,9 +122,6 @@ AUDIO_PAL += lib_bt_bundle
 AUDIO_PAL += lib_bt_aptx
 AUDIO_PAL += lib_bt_ble
 BOARD_SUPPORTS_OPENSOURCE_STHAL := true
-ifeq ($(TARGET_SUPPORTS_DS),true)
-AUDIO_USE_POWER_STATE_MONITOR := true
-endif
 
 AUDIO_HARDWARE += audio.usb.default
 AUDIO_HARDWARE += audio.r_submix.default
