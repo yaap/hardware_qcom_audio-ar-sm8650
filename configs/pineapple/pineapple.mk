@@ -131,10 +131,12 @@ PRODUCT_COPY_FILES += \
     $(CONFIG_PAL_SRC_DIR)/mixer_paths_pineapple_qrd.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_pineapple_qrd.xml \
     $(CONFIG_PAL_SRC_DIR)/mixer_paths_pineapple_mtp.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_pineapple_mtp.xml \
     $(CONFIG_PAL_SRC_DIR)/mixer_paths_pineapple_cdp.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_pineapple_cdp.xml \
+    $(CONFIG_PAL_SRC_DIR)/mixer_paths_pineapple_qrd_sku2.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_pineapple_qrd_sku2.xml \
     $(CONFIG_PAL_SRC_DIR)/mixer_paths_pineapple_cdp_wsa883x.xml:$(CONFIG_SKU_OUT_DIR)/mixer_paths_pineapple_cdp_wsa883x.xml \
     $(CONFIG_PAL_SRC_DIR)/resourcemanager_pineapple_qrd.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_pineapple_qrd.xml \
     $(CONFIG_PAL_SRC_DIR)/resourcemanager_pineapple_mtp.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_pineapple_mtp.xml \
     $(CONFIG_PAL_SRC_DIR)/resourcemanager_pineapple_cdp.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_pineapple_cdp.xml \
+    $(CONFIG_PAL_SRC_DIR)/resourcemanager_pineapple_qrd_sku2.xml:$(CONFIG_SKU_OUT_DIR)/resourcemanager_pineapple_qrd_sku2.xml \
     $(CONFIG_PAL_SRC_DIR)/usecaseKvManager.xml:$(TARGET_COPY_OUT_VENDOR)/etc/usecaseKvManager.xml \
     vendor/qcom/opensource/audio-hal/primary-hal/configs/common/media_codecs_vendor_audio.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs_vendor_audio.xml \
     frameworks/native/data/etc/android.hardware.audio.pro.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.audio.pro.xml \

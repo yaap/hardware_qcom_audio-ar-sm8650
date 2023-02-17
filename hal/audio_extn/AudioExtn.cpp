@@ -27,7 +27,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -72,6 +72,8 @@ using android::OK;
 #define FM_LIB_PATH LIBS"libfmpal.so"
 
 #define BT_IPC_SOURCE_LIB_NAME LIBS"btaudio_offload_if.so"
+#define ADC_PARAMETER_QVA_VERSION "qva.version"
+#define ADC_QVA_FILE_NAME "/data/vendor/audio/adc_qva_version.txt"
 
 static batt_listener_init_t batt_listener_init;
 static batt_listener_deinit_t batt_listener_deinit;
@@ -379,6 +381,29 @@ void AudioExtn::audio_extn_set_parameters(std::shared_ptr<AudioDevice> adev,
                                      struct str_parms *params){
     audio_extn_hfp_set_parameters(adev, params);
     audio_extn_fm_set_parameters(adev, params);
+    audio_data_collector_set_parameters(adev, params);
+}
+
+void AudioExtn::audio_data_collector_set_parameters(std::shared_ptr<AudioDevice> adev,
+                                     struct str_parms *params){
+    FILE* fp;
+    int status = 0;
+    char value[50] = {0};
+
+    status = str_parms_get_str(params, ADC_PARAMETER_QVA_VERSION, value,
+                                     sizeof(value));
+    if (status >= 0) {
+        fp = fopen(ADC_QVA_FILE_NAME, "w");
+        if (!fp) {
+            AHAL_ERR("File open failed for write");
+        } else {
+            char qva_version[50] = "qva_version=";
+            strlcat(qva_version, value, sizeof(qva_version));
+            AHAL_DBG("QVA Version : %s", qva_version);
+            fprintf(fp, "%s", qva_version);
+            fclose(fp);
+        }
+    }
 }
 
 int AudioExtn::get_controller_stream_from_params(struct str_parms *parms,

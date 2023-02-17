@@ -61,7 +61,6 @@ AUDIO_C2 += c2audio.vendor.ext-arm64.policy
 
 AUDIO_TEST := mcs_test
 AUDIO_TEST += ar_util_in_test_example
-AUDIO_TEST += osal_in_test_example
 
 
 #AUDIO_MODULES := audio.a2dp.default
@@ -70,6 +69,7 @@ AUDIO_MODULES += audio.r_submix.default
 AUDIO_MODULES += audio.primary.pineapple
 AUDIO_MODULES += ftm_test_config
 AUDIO_MODULES += ftm_test_config_pineapple-qrd-snd-card
+AUDIO_MODULES += ftm_test_config_pineapple-qrd-sku2-snd-card
 AUDIO_MODULES += audioadsprpcd
 AUDIO_MODULES += android.hardware.audio.service_64
 AUDIO_MODULES += MTP_acdb_cal.acdb
@@ -80,6 +80,8 @@ AUDIO_MODULES += QRD_acdb_cal.acdb
 AUDIO_MODULES += QRD_workspaceFileXml.qwsp
 AUDIO_MODULES += IDP_UPD_acdb_cal.acdb
 AUDIO_MODULES += IDP_UPD_workspaceFileXml.qwsp
+AUDIO_MODULES += QRD_pineapple_sku2_acdb_cal.acdb
+AUDIO_MODULES += QRD_pineapple_sku2_workspaceFileXml.qwsp
 AUDIO_MODULES += fai__2.3.0_0.1__3.0.0_0.0__eai_1.10.pmd
 AUDIO_MODULES += fai__2.3.0_0.1__3.0.0_0.0__eai_1.36_enpu2_comp.pmd
 AUDIO_MODULES += fai__2.0.0_0.1__3.0.0_0.0__eai_1.36_enpu2.pmd
@@ -102,6 +104,7 @@ AUDIO_MODULES += libvui_dmgr
 AUDIO_MODULES += libvui_dmgr_client
 AUDIO_MODULES += qsap_voiceui
 AUDIO_MODULES += qsap_voiceui.policy
+AUDIO_MODULES += libaudiocollector
 
 AUDIO_MODULES += $(AUDIO_AGM)
 AUDIO_MODULES += $(AUDIO_PAL)
