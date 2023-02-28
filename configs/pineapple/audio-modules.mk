@@ -105,6 +105,9 @@ AUDIO_MODULES += libvui_dmgr_client
 AUDIO_MODULES += qsap_voiceui
 AUDIO_MODULES += qsap_voiceui.policy
 AUDIO_MODULES += libaudiocollector
+AUDIO_MODULES += libhotword_intf
+AUDIO_MODULES += libcustomva_intf
+AUDIO_MODULES += libvui_intf
 
 AUDIO_MODULES += $(AUDIO_AGM)
 AUDIO_MODULES += $(AUDIO_PAL)
