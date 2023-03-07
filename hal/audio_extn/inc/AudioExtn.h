@@ -78,9 +78,37 @@ typedef enum {
     LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH,
     /** Decoding is done by HW an there is control only */
     LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH,
+    /** SW Encoding for LE Audio Broadcast */
+    LE_AUDIO_BROADCAST_SOFTWARE_ENCODING_DATAPATH,
+    /** HW Encoding for LE Audio Broadcast */
+    LE_AUDIO_BROADCAST_HARDWARE_OFFLOAD_ENCODING_DATAPATH,
 }tSESSION_TYPE;
 
+const std::map<tSESSION_TYPE, pal_device_id_t> SessionTypePalDevMap
+{
+    {A2DP_HARDWARE_OFFLOAD_DATAPATH, PAL_DEVICE_OUT_BLUETOOTH_A2DP},
+    {LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH, PAL_DEVICE_OUT_BLUETOOTH_BLE},
+    {LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH, PAL_DEVICE_IN_BLUETOOTH_BLE},
+    {LE_AUDIO_BROADCAST_HARDWARE_OFFLOAD_ENCODING_DATAPATH, PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST},
+};
 
+typedef enum {
+    /**If reconfiguration is in progress state */
+    SESSION_SUSPEND,
+    /**If reconfiguration is in complete state */
+    SESSION_RESUME,
+    /**To set Lc3 channel mode as Mono */
+    CHANNEL_MONO,
+    /**To set LC3 channel mode as Stereo */
+    CHANNEL_STEREO,
+}tRECONFIG_STATE;
+
+const std::map<int32_t, std::string> reconfigStateName{
+    {SESSION_SUSPEND, std::string{"SESSION_SUSPEND"}},
+    {SESSION_RESUME,  std::string{"SESSION_RESUME"}},
+    {CHANNEL_MONO,    std::string{"CHANNEL_MONO"}},
+    {CHANNEL_STEREO,  std::string{"CHANNEL_STEREO"}},
+};
 // start of CompressCapture
 class CompressCapture {
    public:
