@@ -511,6 +511,18 @@ private:
     std::set<audio_devices_t> mAndroidOutDevices;
     bool mInitialized;
 
+    // [offload playspeed
+    bool isOffloadUsecase() { return GetUseCase() == USECASE_AUDIO_PLAYBACK_OFFLOAD; }
+    bool isOffloadSpeedSupported();
+
+    bool isValidPlaybackRate(const audio_playback_rate_t *playbackRate);
+    bool isValidStretchMode(audio_timestretch_stretch_mode_t stretchMode);
+    bool isValidFallbackMode(audio_timestretch_fallback_mode_t fallbackMode);
+
+    int setPlaybackRateToPal(const audio_playback_rate_t *playbackRate);
+
+    audio_playback_rate_t mPlaybackRate = AUDIO_PLAYBACK_RATE_INITIALIZER;
+    // offload Playspeed]
 public:
     StreamOutPrimary(audio_io_handle_t handle,
                      const std::set<audio_devices_t>& devices,
@@ -561,6 +573,11 @@ public:
     std::vector<playback_track_metadata_t> tracks;
     int SetAggregateSourceMetadata(bool voice_active);
     static std::mutex sourceMetadata_mutex_;
+
+    // [offload playback speed
+    int getPlaybackRateParameters(audio_playback_rate_t *playbackRate);
+    int setPlaybackRateParameters(const audio_playback_rate_t *playbackRate);
+    // offload playback speed]
 protected:
     struct timespec writeAt;
     int get_compressed_buffer_size();

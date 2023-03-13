@@ -207,6 +207,7 @@ public:
     bool hac_voip = false;
     bool usb_input_dev_enabled = false;
     bool usb_out_headset = false;
+    bool mOffloadSpeedSupported = false;
     static bool mic_characteristics_available;
     bool icmd_playback = false;
     static microphone_characteristics_t microphones;
@@ -229,6 +230,7 @@ public:
     static void xml_end_tag(void *userdata, const XML_Char *tag_name);
     static void xml_char_data_handler(void *userdata, const XML_Char *s, int len);
     static int parse_xml();
+    bool isOffloadSpeedSupported() { return mOffloadSpeedSupported;}
 protected:
     AudioDevice() {}
     std::shared_ptr<AudioVoice> VoiceInit();
