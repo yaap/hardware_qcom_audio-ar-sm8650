@@ -172,6 +172,7 @@ PRODUCT_PACKAGES += IDP_acdb_cal_monaco_slate_wsa.acdb
 PRODUCT_PACKAGES += IDP_workspaceFileXml_monaco_slate_wsa.qwsp
 PRODUCT_PACKAGES += fai__2.6.0_0.0__3.0.0_0.0__eai_1.10.pmd
 PRODUCT_PACKAGES += fai__3.0.0_0.0__eai_1.10.pmd
+PRODUCT_PACKAGES += fai__3.0.0_0.0__eai_1.36_enpu2.pmd
 
 PRODUCT_PACKAGES += IDP_acdb_cal_monaco.acdb
 PRODUCT_PACKAGES += IDP_workspaceFileXml_monaco.qwsp
