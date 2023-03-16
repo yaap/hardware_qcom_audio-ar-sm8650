@@ -2048,6 +2048,14 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             sizeof(pal_param_bta2dp_t));
     }
 
+    ret = str_parms_get_str(parms, "icmd_playback", value, sizeof(value));
+    if (ret >= 0) {
+        if (strcmp(value, "true") == 0)
+            adev_->icmd_playback = true;
+        else
+            adev_->icmd_playback  = false;
+    }
+
 
 exit:
     if (parms)

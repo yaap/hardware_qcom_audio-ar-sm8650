@@ -2924,6 +2924,8 @@ int StreamOutPrimary::Open() {
                 }
             }
             break;
+        case PAL_STREAM_VOICE_CALL_MUSIC:
+            streamAttributes_.info.incall_music_info.local_playback = adevice->icmd_playback;
         default:
             break;
     }

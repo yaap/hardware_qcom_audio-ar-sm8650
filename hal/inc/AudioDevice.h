@@ -210,6 +210,7 @@ public:
     bool usb_input_dev_enabled = false;
     bool usb_out_headset = false;
     static bool mic_characteristics_available;
+    bool icmd_playback = false;
     static microphone_characteristics_t microphones;
     static snd_device_to_mic_map_t microphone_maps[PAL_MAX_INPUT_DEVICES];
     static bool find_enum_by_string(const struct audio_string_to_enum * table, const char * name,
