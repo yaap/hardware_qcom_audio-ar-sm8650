@@ -122,9 +122,6 @@ AUDIO_PAL += lib_bt_bundle
 AUDIO_PAL += lib_bt_aptx
 AUDIO_PAL += lib_bt_ble
 BOARD_SUPPORTS_OPENSOURCE_STHAL := true
-ifeq ($(TARGET_SUPPORTS_DS),true)
-AUDIO_USE_POWER_STATE_MONITOR := true
-endif
 
 AUDIO_HARDWARE += audio.usb.default
 AUDIO_HARDWARE += audio.r_submix.default
@@ -165,6 +162,7 @@ PRODUCT_PACKAGES += $(AUDIO_HARDWARE)
 PRODUCT_PACKAGES += $(AUDIO_WRAPPER)
 PRODUCT_PACKAGES += $(AUDIO_HAL_TEST_APPS)
 PRODUCT_PACKAGES += ftm_test_config
+PRODUCT_PACKAGES += ftm_test_config_monaco-idp-snd-card
 
 PRODUCT_PACKAGES += IDP_acdb_cal_monaco_slate.acdb
 PRODUCT_PACKAGES += IDP_workspaceFileXml_monaco_slate.qwsp
@@ -174,6 +172,7 @@ PRODUCT_PACKAGES += IDP_acdb_cal_monaco_slate_wsa.acdb
 PRODUCT_PACKAGES += IDP_workspaceFileXml_monaco_slate_wsa.qwsp
 PRODUCT_PACKAGES += fai__2.6.0_0.0__3.0.0_0.0__eai_1.10.pmd
 PRODUCT_PACKAGES += fai__3.0.0_0.0__eai_1.10.pmd
+PRODUCT_PACKAGES += fai__3.0.0_0.0__eai_1.36_enpu2.pmd
 
 PRODUCT_PACKAGES += IDP_acdb_cal_monaco.acdb
 PRODUCT_PACKAGES += IDP_workspaceFileXml_monaco.qwsp

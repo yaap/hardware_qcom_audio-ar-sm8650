@@ -566,11 +566,13 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
     int ret = 0;
     pal_param_bta2dp_t param_bt_a2dp;
     AHAL_DBG("reconfig_cb enter");
-    if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH) {
 
-        /* If reconfiguration is in progress state, we do a2dp suspend.
-         * If reconfiguration is in complete state, we do a2dp resume.
-         */
+    /* If reconfiguration is in progress state (state = 0), perform a2dp suspend.
+     * If reconfiguration is in complete state (state = 1), perform a2dp resume.
+     * Set LC3 channel mode as mono (state = 2).
+     * Set LC3 channel mode as stereo (state = 3).
+     */
+    if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH) {
         if (state == 0) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
@@ -584,6 +586,14 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
+        } else if (state == 2) {
+            param_bt_a2dp.is_lc3_mono_mode_on = true;
+            ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_LC3_CONFIG, (void*)&param_bt_a2dp,
+                sizeof(pal_param_bta2dp_t));
+        } else if (state == 3) {
+            param_bt_a2dp.is_lc3_mono_mode_on = false;
+            ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_LC3_CONFIG, (void*)&param_bt_a2dp,
+                sizeof(pal_param_bta2dp_t));
         }
     } else if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH) {
         if (state == 0) {
@@ -598,6 +608,21 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void *)&param_bt_a2dp,
+                                sizeof(pal_param_bta2dp_t));
+        }
+    } else if (session_type == A2DP_HARDWARE_OFFLOAD_DATAPATH) {
+        if (state == 0) {
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
+            param_bt_a2dp.a2dp_suspended = true;
+            param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+
+            ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
+                                sizeof(pal_param_bta2dp_t));
+        } else if (state == 1) {
+            param_bt_a2dp.a2dp_suspended = false;
+            param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+
+            ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
         }
     }
@@ -684,18 +709,18 @@ feature_disabled:
 // END: A2DP
 
 // START: DEVICE UTILS =============================================================
-bool AudioExtn::audio_devices_cmp(const std::set<audio_devices_t>& devs, audio_device_cmp_fn_t fn){
+bool AudioExtn::audio_devices_cmp(const std::set<audio_devices_t>& devs, audio_device_cmp_fn_t fn) {
     for(auto dev : devs)
-        if(!fn(dev))
-            return false;
-    return true;
+        if(fn(dev))
+            return true;
+    return false;
 }
 
-bool AudioExtn::audio_devices_cmp(const std::set<audio_devices_t>& devs, audio_devices_t dev){
+bool AudioExtn::audio_devices_cmp(const std::set<audio_devices_t>& devs, audio_devices_t dev) {
     for(auto d : devs)
-        if(d != dev)
-            return false;
-    return true;
+        if(d == dev)
+            return true;
+    return false;
 }
 
 audio_devices_t AudioExtn::get_device_types(const std::set<audio_devices_t>& devs){

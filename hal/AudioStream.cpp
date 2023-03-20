@@ -25,42 +25,11 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-/*
- *  Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Innovation Center are provided under the following license:
  *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted (subject to the limitations in the
- *  disclaimer below) provided that the following conditions are met:
- *
- *      * Redistributions of source code must retain the above copyright
- *        notice, this list of conditions and the following disclaimer.
- *
- *      * Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials provided
- *        with the distribution.
- *
- *      * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *        contributors may be used to endorse or promote products derived
- *        from this software without specific prior written permission.
- *
- *  NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- *  GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- *  HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- *  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- *  ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- *  GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- *  IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- *  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- *  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #define LOG_NDEBUG 0
@@ -831,7 +800,7 @@ static int astream_out_get_presentation_position(
     if (astream_out) {
        switch (astream_out->GetPalStreamType(astream_out->flags_)) {
        case PAL_STREAM_PCM_OFFLOAD:
-           if (AudioDevice::sndCardState == CARD_STATUS_OFFLINE) {
+           if (PAL_CARD_STATUS_DOWN(AudioDevice::sndCardState)) {
                *frames = astream_out->GetFramesWritten(timestamp);
                astream_out->UpdatemCachedPosition(*frames);
                break;
@@ -877,7 +846,7 @@ static int out_get_render_position(const struct audio_stream_out *stream,
     if (astream_out) {
         switch (astream_out->GetPalStreamType(astream_out->flags_)) {
         case PAL_STREAM_PCM_OFFLOAD:
-            if (AudioDevice::sndCardState == CARD_STATUS_OFFLINE) {
+            if (PAL_CARD_STATUS_DOWN(AudioDevice::sndCardState)) {
                 frames =  astream_out->GetFramesWritten(NULL);
                 *dsp_frames = (uint32_t) frames;
                 astream_out->UpdatemCachedPosition(*dsp_frames);
@@ -1066,9 +1035,18 @@ static void out_update_source_metadata_v7(
         astream_out->btSourceMetadata.tracks = astream_out->tracks.data();
         audio_mode_t mode;
         bool voice_active = false;
+        bool voice_mode_active = false;
 
         if (adevice && adevice->voice_) {
             voice_active = adevice->voice_->get_voice_call_state(&mode);
+            /* In case of concurrency of media/gaming stream with voice call,
+             * framework will send metadata update when ringtone stream ends.
+             * As only media/gaming stream is present at that point, it will
+             * trigger reconfiguration in BT stack. To avoid this, block all
+             * framework triggered metadata update if phone mode is in CALL.
+             */
+            if (mode == AUDIO_MODE_IN_CALL)
+                voice_mode_active = true;
         } else {
             AHAL_ERR("adevice voice is null");
         }
@@ -1103,7 +1081,7 @@ static void out_update_source_metadata_v7(
         astream_out->btSourceMetadata.tracks = astream_out->tracks.data();
 
         //Send aggregated metadata of all active stream o/ps
-        ret = astream_out->SetAggregateSourceMetadata(voice_active);
+        ret = astream_out->SetAggregateSourceMetadata(voice_mode_active);
         if (ret != 0) {
             AHAL_ERR("Set PAL_PARAM_ID_SET_SOURCE_METADATA for %d failed", ret);
         }
@@ -1475,6 +1453,7 @@ static void in_update_sink_metadata_v7(
             struct record_track_metadata_v7* track = sink_metadata->tracks;
             audio_mode_t mode;
             bool voice_active = false;
+            bool voice_mode_active = false;
             AHAL_DBG("track count is %d for usecase (%d: %s)", track_count,
                 astream_in->GetUseCase(), use_case_table[astream_in->GetUseCase()]);
 
@@ -1498,6 +1477,9 @@ static void in_update_sink_metadata_v7(
 
             if (adevice && adevice->voice_) {
                 voice_active = adevice->voice_->get_voice_call_state(&mode);
+                // Flag to block framework triggered metadata update to BT if phone mode IN_CALL
+                if (mode == AUDIO_MODE_IN_CALL)
+                    voice_mode_active = true;
             }
             else {
                 AHAL_ERR("adevice voice is null");
@@ -1515,7 +1497,7 @@ static void in_update_sink_metadata_v7(
             astream_in->btSinkMetadata.tracks = astream_in->tracks.data();
 
             //Send aggregated metadata of all active stream i/ps
-            ret = astream_in->SetAggregateSinkMetadata(voice_active);
+            ret = astream_in->SetAggregateSinkMetadata(voice_mode_active);
 
             if (ret != 0) {
                 AHAL_ERR("Set PAL_PARAM_ID_SET_SINK_METADATA for %d failed", ret);
@@ -2239,7 +2221,7 @@ int StreamOutPrimary::Standby() {
              * when ssr happens, dsp position for pcm offload could be 0,
              * so get written frames. Else, get frames.
              */
-            if (AudioDevice::sndCardState == CARD_STATUS_OFFLINE) {
+            if (PAL_CARD_STATUS_DOWN(AudioDevice::sndCardState)) {
                 struct timespec ts;
                 // release stream lock as GetFramesWritten will lock/unlock stream mutex
                 stream_mutex_.unlock();
@@ -2328,6 +2310,9 @@ int StreamOutPrimary::RouteStream(const std::set<audio_devices_t>& new_devices, 
     bool isHifiFilterEnabled = false;
     bool *payload_hifiFilter = &isHifiFilterEnabled;
     size_t param_size = 0;
+
+    pal_param_bta2dp_t *param_bt_a2dp = nullptr;
+    size_t bt_param_size = 0;
 
     stream_mutex_.lock();
     if (!mInitialized) {
@@ -2456,6 +2441,21 @@ int StreamOutPrimary::RouteStream(const std::set<audio_devices_t>& new_devices, 
                     sizeof(mPalOutDevice->custom_config.custom_key));
         }
 
+        if (AudioExtn::audio_devices_cmp(mAndroidOutDevices,
+                                         (audio_devices_t)AUDIO_DEVICE_OUT_BLUETOOTH_SCO) ||
+            AudioExtn::audio_devices_cmp(mAndroidOutDevices,
+                                         (audio_devices_t)AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET) ||
+            AudioExtn::audio_devices_cmp(mAndroidOutDevices,
+                                         (audio_devices_t)AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT)) {
+            ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void **)&param_bt_a2dp,
+                                &bt_param_size, nullptr);
+            if (!ret && param_bt_a2dp && !param_bt_a2dp->a2dp_suspended ) {
+                AHAL_ERR("Cannot route stream to SCO if A2dp is not suspended");
+                ret = -EINVAL;
+                goto done;
+            }
+        }
+
         if (pal_stream_handle_) {
             ret = pal_stream_set_device(pal_stream_handle_, noPalDevices, mPalOutDevice);
             if (!ret) {
@@ -2514,16 +2514,12 @@ int StreamOutPrimary::SetParameters(struct str_parms *parms) {
         if (ret1 >= 0 ) {
             gaplessMeta.encoderDelay = atoi(value);
             AHAL_DBG("new encoder delay %u", gaplessMeta.encoderDelay);
-        } else {
-            gaplessMeta.encoderDelay = 0;
         }
 
         ret1 = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_PADDING_SAMPLES, value, sizeof(value));
         if (ret1 >= 0) {
             gaplessMeta.encoderPadding = atoi(value);
             AHAL_DBG("padding %u", gaplessMeta.encoderPadding);
-        } else {
-            gaplessMeta.encoderPadding = 0;
         }
     }
 
@@ -2851,6 +2847,9 @@ int StreamOutPrimary::Open() {
     bool *payload_hifiFilter = &isHifiFilterEnabled;
     size_t param_size = 0;
 
+    pal_param_bta2dp_t *param_bt_a2dp = nullptr;
+    size_t bt_param_size = 0;
+
     AHAL_INFO("Enter: OutPrimary usecase(%d: %s)", GetUseCase(), use_case_table[GetUseCase()]);
 
     if (!mInitialized) {
@@ -2975,6 +2974,22 @@ int StreamOutPrimary::Open() {
            streamAttributes_.out_media_config.aud_fmt_id, streamAttributes_.type,
            streamAttributes_.out_media_config.bit_width);
     AHAL_DBG("msample_rate %d mchannels %d mNoOfOutDevices %zu", msample_rate, mchannels, mAndroidOutDevices.size());
+
+    if (AudioExtn::audio_devices_cmp(mAndroidOutDevices,
+                                     (audio_devices_t)AUDIO_DEVICE_OUT_BLUETOOTH_SCO) ||
+        AudioExtn::audio_devices_cmp(mAndroidOutDevices,
+                                     (audio_devices_t)AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET) ||
+        AudioExtn::audio_devices_cmp(mAndroidOutDevices,
+                                     (audio_devices_t)AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT)) {
+        ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void **)&param_bt_a2dp,
+                            &bt_param_size, nullptr);
+        if (!ret && param_bt_a2dp && !param_bt_a2dp->a2dp_suspended) {
+            AHAL_ERR("Cannot open stream on SCO if A2dp is not suspended");
+            ret = -EINVAL;
+            goto error_open;
+        }
+    }
+
     ret = pal_stream_open(&streamAttributes_,
                           mAndroidOutDevices.size(),
                           mPalOutDevice,
@@ -3441,12 +3456,58 @@ ssize_t StreamOutPrimary::write(const void *buffer, size_t bytes)
     palBuffer.size = bytes;
     palBuffer.offset = 0;
 
+    pal_param_bta2dp_t *param_bt_a2dp = nullptr;
+    size_t bt_param_size = 0;
+    bool is_usage_ringtone = false;
+    uint32_t frameSize = 0;
+    uint32_t byteWidth = 0;
+    uint32_t sampleRate = 0;
+    uint32_t channelCount = 0;
+
     AHAL_VERBOSE("handle_ %x bytes:(%zu)", handle_, bytes);
 
     stream_mutex_.lock();
     ret = configurePalOutputStream();
     if (ret < 0)
         goto exit;
+
+    /* If reconfiguration has not finished before ringtone stream
+     * start on combo device with BLE, we are not sending write to PAL,
+     * instead we are sleeping here for pcm data duration and returning
+     * success. This will ensure that there will be no audio break on
+     * Speaker due to write delays during reconfiguration. Once reconfig
+     * has finished, writes go though to the PAL.
+     */
+    if (mAndroidOutDevices.size() > 1) {
+        for (int i = 0; i < btSourceMetadata.track_count; i++) {
+            if (btSourceMetadata.tracks[i].usage == AUDIO_USAGE_NOTIFICATION_TELEPHONY_RINGTONE) {
+                is_usage_ringtone = true;
+                break;
+            }
+        }
+
+        if (is_usage_ringtone && isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
+            param_bt_a2dp = nullptr;
+            bt_param_size = 0;
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
+            ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void **)&param_bt_a2dp,
+                                &bt_param_size, nullptr);
+            if (!ret && param_bt_a2dp && param_bt_a2dp->a2dp_suspended) {
+                 byteWidth = streamAttributes_.out_media_config.bit_width / 8;
+                 sampleRate = streamAttributes_.out_media_config.sample_rate;
+                 channelCount = streamAttributes_.out_media_config.ch_info.channels;
+                 frameSize = byteWidth * channelCount;
+                 if ((frameSize == 0) || (sampleRate == 0)) {
+                     AHAL_ERR("frameSize=%d, sampleRate=%d", frameSize, sampleRate);
+                     stream_mutex_.unlock();
+                     return -EINVAL;
+                 }
+                 usleep((uint64_t)bytes * 1000000 / frameSize / sampleRate);
+                 AHAL_VERBOSE("BLE suspended; dropped ringtone buffer size - %d", bytes);
+                 goto exit;
+            }
+        }
+    }
     ATRACE_BEGIN("hal: pal_stream_write");
     if (halInputFormat != halOutputFormat && convertBuffer != NULL) {
         if (bytes > fragment_size_) {
@@ -3693,6 +3754,10 @@ StreamOutPrimary::StreamOutPrimary(
             free(device_cap_query_);
             dynamic_media_config = NULL;
             device_cap_query_ = NULL;
+        } else if (audio_is_linear_pcm(config->format) && AUDIO_OUTPUT_FLAG_NONE == flags) {
+            // HIFI output port
+            AHAL_DBG("use deep buffer for HIFI output on USBC hs");
+            flags_ = AUDIO_OUTPUT_FLAG_DEEP_BUFFER;
         }
         if (!config->sample_rate || !config->format || !config->channel_mask) {
             if (dynamic_media_config) {
@@ -3707,7 +3772,7 @@ StreamOutPrimary::StreamOutPrimary(
             if (config->format == AUDIO_FORMAT_DEFAULT)
                 config->format = AUDIO_FORMAT_PCM_16_BIT;
             memcpy(&config_, config, sizeof(struct audio_config));
-            AHAL_INFO("sample rate = %#x channel_mask=%#x fmt=%#x",
+            AHAL_INFO("sample rate = %d channel_mask = %#x fmt = %#x",
                       config->sample_rate, config->channel_mask,
                       config->format);
 
@@ -3730,7 +3795,7 @@ StreamOutPrimary::StreamOutPrimary(
         }
     }
 
-    usecase_ = GetOutputUseCase(flags);
+    usecase_ = GetOutputUseCase(flags_);
     if (address) {
         strlcpy((char *)&address_, address, AUDIO_DEVICE_MAX_ADDRESS_LEN);
     } else {
@@ -3772,7 +3837,7 @@ StreamOutPrimary::StreamOutPrimary(
             mPalOutDevice[i].config.sample_rate = DEFAULT_OUTPUT_SAMPLING_RATE;
         mPalOutDevice[i].config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
         mPalOutDevice[i].config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE; // TODO: need to convert this from output format
-        AHAL_INFO("device rate = %#x width=%#x fmt=%#x",
+        AHAL_INFO("device rate = %d width = %#x fmt = %#x",
             mPalOutDevice[i].config.sample_rate,
             mPalOutDevice[i].config.bit_width,
             mPalOutDevice[i].config.aud_fmt_id);
@@ -4219,6 +4284,9 @@ int StreamInPrimary::RouteStream(const std::set<audio_devices_t>& new_devices, b
     struct pal_channel_info ch_info = {0, {0}};
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
 
+    pal_param_bta2dp_t *param_bt_a2dp = nullptr;
+    size_t bt_param_size = 0;
+
     AHAL_INFO("Enter: InPrimary usecase(%d: %s)", GetUseCase(), use_case_table[GetUseCase()]);
 
     stream_mutex_.lock();
@@ -4335,6 +4403,17 @@ int StreamInPrimary::RouteStream(const std::set<audio_devices_t>& new_devices, b
 
         mAndroidInDevices = new_devices;
 
+        if (AudioExtn::audio_devices_cmp(mAndroidInDevices,
+                                         (audio_devices_t)AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET)) {
+            ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void **)&param_bt_a2dp,
+                                &bt_param_size, nullptr);
+            if (!ret && param_bt_a2dp && !param_bt_a2dp->a2dp_suspended) {
+                AHAL_ERR("Cannot route stream from SCO if A2dp is not suspended");
+                ret = -EINVAL;
+                goto done;
+            }
+        }
+
         if (pal_stream_handle_)
             ret = pal_stream_set_device(pal_stream_handle_, noPalDevices, mPalInDevice);
     }
@@ -4415,6 +4494,9 @@ int StreamInPrimary::Open() {
     size_t payload_size = 0;
     dynamic_media_config_t dynamic_media_config;
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
+
+    pal_param_bta2dp_t *param_bt_a2dp = nullptr;
+    size_t bt_param_size = 0;
 
     AHAL_INFO("Enter: InPrimary usecase(%d: %s)", GetUseCase(), use_case_table[GetUseCase()]);
     if (!mInitialized) {
@@ -4555,6 +4637,17 @@ int StreamInPrimary::Open() {
     }
 
     AHAL_DBG("(%x:ret)", ret);
+
+    if (AudioExtn::audio_devices_cmp(mAndroidInDevices,
+                                     (audio_devices_t)AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET)) {
+        ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void **)&param_bt_a2dp,
+                            &bt_param_size, nullptr);
+        if (!ret && param_bt_a2dp && !param_bt_a2dp->a2dp_suspended) {
+            AHAL_ERR("Cannot open stream on SCO if A2dp is not suspended");
+            ret = -EINVAL;
+            goto exit;
+        }
+    }
 
     ret = pal_stream_open(&streamAttributes_,
                          mAndroidInDevices.size(),
