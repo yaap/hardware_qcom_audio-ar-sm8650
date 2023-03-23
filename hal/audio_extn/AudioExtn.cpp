@@ -565,7 +565,8 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
 {
     int ret = 0;
     pal_param_bta2dp_t param_bt_a2dp;
-    AHAL_DBG("reconfig_cb enter");
+    AHAL_DBG("reconfig_cb enter with state %s for %s", reconfigStateName.at(state).c_str(),
+        deviceNameLUT.at(SessionTypePalDevMap.at(session_type)).c_str());
 
     /* If reconfiguration is in progress state (state = 0), perform a2dp suspend.
      * If reconfiguration is in complete state (state = 1), perform a2dp resume.
@@ -573,37 +574,39 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
      * Set LC3 channel mode as stereo (state = 3).
      */
     if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH) {
-        if (state == 0) {
+        if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 1) {
+        } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
             param_bt_a2dp.a2dp_suspended = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 2) {
+        } else if ((tRECONFIG_STATE)state == CHANNEL_MONO) {
             param_bt_a2dp.is_lc3_mono_mode_on = true;
+
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_LC3_CONFIG, (void*)&param_bt_a2dp,
                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 3) {
+        } else if ((tRECONFIG_STATE)state == CHANNEL_STEREO) {
             param_bt_a2dp.is_lc3_mono_mode_on = false;
+
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_LC3_CONFIG, (void*)&param_bt_a2dp,
                 sizeof(pal_param_bta2dp_t));
         }
     } else if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH) {
-        if (state == 0) {
+        if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_capture_suspended = true;
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 1) {
+        } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
             param_bt_a2dp.a2dp_capture_suspended = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
@@ -611,14 +614,14 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
                                 sizeof(pal_param_bta2dp_t));
         }
     } else if (session_type == A2DP_HARDWARE_OFFLOAD_DATAPATH) {
-        if (state == 0) {
+        if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 1) {
+        } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
             param_bt_a2dp.a2dp_suspended = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
@@ -626,7 +629,8 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
                                 sizeof(pal_param_bta2dp_t));
         }
     }
-    AHAL_ERR("reconfig_cb exit");
+    AHAL_DBG("reconfig_cb exit with state %s for %s", reconfigStateName.at(state).c_str(),
+        deviceNameLUT.at(SessionTypePalDevMap.at(session_type)).c_str());
     return ret;
 }
 
