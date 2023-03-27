@@ -53,6 +53,11 @@ IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
+<!--
+    Changes from Qualcomm Innovation Center are provided under the following license:
+     Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+     SPDX-License-Identifier: BSD-3-Clause-Clear
+ -->
 
 <audioPolicyConfiguration version="7.0" xmlns:xi="http://www.w3.org/2001/XInclude">
     <!-- version section contains a “version” tag in the form “major.minor” e.g version=”1.0” -->
@@ -225,6 +230,12 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                     <profile name="compress-capture-AAC-LC" format="AUDIO_FORMAT_AAC_LC"
                              samplingRates="8000 11025 12000 16000 22050 24000 32000 44100 48000"
                              channelMasks="AUDIO_CHANNEL_IN_MONO AUDIO_CHANNEL_IN_STEREO AUDIO_CHANNEL_IN_FRONT_BACK"/>
+                    <profile name="compress-capture-AAC-HE-V1" format="AUDIO_FORMAT_AAC_ADTS_HE_V1"
+                             samplingRates="24000 32000 44100 48000"
+                             channelMasks="AUDIO_CHANNEL_IN_MONO AUDIO_CHANNEL_IN_STEREO AUDIO_CHANNEL_IN_FRONT_BACK"/>
+                    <profile name="compress-capture-AAC-HE-V2" format="AUDIO_FORMAT_AAC_ADTS_HE_V2"
+                             samplingRates="24000 32000 44100 48000"
+                             channelMasks="AUDIO_CHANNEL_IN_STEREO"/>
                 </mixPort>
                 <mixPort name="fast input" role="sink"
                          flags="AUDIO_INPUT_FLAG_FAST">
@@ -381,6 +392,12 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                     <profile name="compress-capture-AAC-LC" format="AUDIO_FORMAT_AAC_LC"
                              samplingRates="8000 11025 12000 16000 22050 24000 32000 44100 48000"
                              channelMasks="AUDIO_CHANNEL_IN_MONO AUDIO_CHANNEL_IN_STEREO AUDIO_CHANNEL_IN_FRONT_BACK"/>
+                    <profile name="compress-capture-AAC-HE-V1" format="AUDIO_FORMAT_AAC_ADTS_HE_V1"
+                             samplingRates="24000 32000 44100 48000"
+                             channelMasks="AUDIO_CHANNEL_IN_MONO AUDIO_CHANNEL_IN_STEREO AUDIO_CHANNEL_IN_FRONT_BACK"/>
+                    <profile name="compress-capture-AAC-HE-V2" format="AUDIO_FORMAT_AAC_ADTS_HE_V2"
+                             samplingRates="24000 32000 44100 48000"
+                             channelMasks="AUDIO_CHANNEL_IN_STEREO"/>
                 </devicePort>
                 <devicePort tagName="Built-In Back Mic" type="AUDIO_DEVICE_IN_BACK_MIC" role="source">
                     <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
