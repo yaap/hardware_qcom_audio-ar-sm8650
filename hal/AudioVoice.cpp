@@ -469,6 +469,7 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
     int retry_cnt = 20;
     const int retry_period_ms = 100;
     std::set<audio_devices_t> crs_devices;
+    bool is_suspend_setparam = false;
 
     AHAL_DBG("Enter");
 
@@ -539,16 +540,27 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
              */
             updateVoiceMetadataForBT(true);
 
+            /*In case of active LEA profile, if voice call accepted by an inactive legacy headset
+            * over SCO profile. APM is not aware about SCO active profile until BT_SCO=ON
+            * event triggers from BT. In meantime before BT_SCO=ON, when LEA is suspended via
+            * setparam call, APM tries to route voice call to BLE device.
+            * In RouteStream call, if suspended state for LEA is true it keep checks over a
+            * sleep of 2 secs. This causes timecheck issue in audioservice. Thus check for
+            * is_suspend_setparam flag to know whether BLE suspended due to the actual setparam
+            * or reconfig_cb(suspend->resume).
+            */
             if ((pal_voice_rx_device_id_ == PAL_DEVICE_OUT_BLUETOOTH_BLE) &&
                 (pal_voice_tx_device_id_ == PAL_DEVICE_IN_BLUETOOTH_BLE)) {
                 do {
                     std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
                     ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED,
                                         (void **)&param_bt_a2dp, &bt_param_size, nullptr);
-                    if (!ret && param_bt_a2dp)
+                    if (!ret && param_bt_a2dp) {
                         a2dp_suspended = param_bt_a2dp->a2dp_suspended;
-                    else
+                        is_suspend_setparam = param_bt_a2dp->is_suspend_setparam;
+                    } else {
                         AHAL_ERR("getparam for PAL_PARAM_ID_BT_A2DP_SUSPENDED failed");
+                    }
                     param_bt_a2dp = nullptr;
                     bt_param_size = 0;
                     ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED,
@@ -559,8 +571,8 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
                         AHAL_ERR("getparam for BT_A2DP_CAPTURE_SUSPENDED failed");
                     param_bt_a2dp = nullptr;
                     bt_param_size = 0;
-                } while ((a2dp_suspended || a2dp_capture_suspended) && retry_cnt-- &&
-                         !usleep(retry_period_ms * 1000));
+                } while (!is_suspend_setparam && (a2dp_suspended || a2dp_capture_suspended) &&
+                    retry_cnt-- && !usleep(retry_period_ms * 1000));
                 AHAL_INFO("a2dp_suspended status %d and a2dp_capture_suspended status %d",
                        a2dp_suspended, a2dp_capture_suspended);
             }
@@ -632,6 +644,7 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
     bool a2dp_capture_suspended = false;
     int retry_cnt = 20;
     const int retry_period_ms = 100;
+    bool is_suspend_setparam = false;
 
     for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         session = &pSession[i];
@@ -662,10 +675,12 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
                             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
                             ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED,
                                                 (void **)&param_bt_a2dp, &bt_param_size, nullptr);
-                            if (!ret && param_bt_a2dp)
+                            if (!ret && param_bt_a2dp) {
                                 a2dp_suspended = param_bt_a2dp->a2dp_suspended;
-                            else
+                                is_suspend_setparam = param_bt_a2dp->is_suspend_setparam;
+                            } else {
                                 AHAL_ERR("getparam for PAL_PARAM_ID_BT_A2DP_SUSPENDED failed");
+                            }
                             param_bt_a2dp = nullptr;
                             bt_param_size = 0;
                             ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED,
@@ -676,8 +691,8 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
                                 AHAL_ERR("getparam for BT_A2DP_CAPTURE_SUSPENDED failed");
                             param_bt_a2dp = nullptr;
                             bt_param_size = 0;
-                        } while ((a2dp_suspended || a2dp_capture_suspended) && retry_cnt-- &&
-                                 !usleep(retry_period_ms * 1000));
+                        } while (!is_suspend_setparam && (a2dp_suspended || a2dp_capture_suspended)
+                            && retry_cnt-- && !usleep(retry_period_ms * 1000));
                         AHAL_INFO("a2dp_suspended status %d and a2dp_capture_suspended status %d",
                                   a2dp_suspended, a2dp_capture_suspended);
                     }

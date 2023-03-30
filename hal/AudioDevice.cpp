@@ -1830,6 +1830,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
     ret = str_parms_get_str(parms, "A2dpSuspended" , value, sizeof(value));
     if (ret >= 0) {
         pal_param_bta2dp_t param_bt_a2dp;
+        param_bt_a2dp.is_suspend_setparam = true;
 
         if (strncmp(value, "true", 4) == 0)
             param_bt_a2dp.a2dp_suspended = true;
@@ -1839,6 +1840,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
         AHAL_INFO("BT A2DP Suspended = %s, command received", value);
+        std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
         ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                             sizeof(pal_param_bta2dp_t));
     }
@@ -2040,6 +2042,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
     ret = str_parms_get_str(parms, "A2dpCaptureSuspend", value, sizeof(value));
     if (ret >= 0) {
         pal_param_bta2dp_t param_bt_a2dp;
+        param_bt_a2dp.is_suspend_setparam = true;
 
         if (strncmp(value, "true", 4) == 0)
             param_bt_a2dp.a2dp_capture_suspended = true;
@@ -2049,6 +2052,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_A2DP;
 
         AHAL_INFO("BT A2DP Capture Suspended = %s, command received", value);
+        std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
         ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void*)&param_bt_a2dp,
             sizeof(pal_param_bta2dp_t));
     }
@@ -2061,6 +2065,34 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             adev_->icmd_playback  = false;
     }
 
+    ret = str_parms_get_str(parms, "LEASuspended", value, sizeof(value));
+    if (ret >= 0) {
+        pal_param_bta2dp_t param_bt_a2dp;
+        param_bt_a2dp.is_suspend_setparam = true;
+
+        if (strcmp(value, "true") == 0) {
+            param_bt_a2dp.a2dp_suspended = true;
+            param_bt_a2dp.a2dp_capture_suspended = true;
+        } else {
+            param_bt_a2dp.a2dp_suspended = false;
+            param_bt_a2dp.a2dp_capture_suspended = false;
+        }
+
+        AHAL_INFO("BT LEA Suspended = %s, command received", value);
+        //Synchronize the suspend/resume calls from setparams and reconfig_cb
+        std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
+        param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
+        ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
+            sizeof(pal_param_bta2dp_t));
+
+        param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
+        ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void*)&param_bt_a2dp,
+            sizeof(pal_param_bta2dp_t));
+
+        param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
+        ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
+            sizeof(pal_param_bta2dp_t));
+    }
 
 exit:
     if (parms)
