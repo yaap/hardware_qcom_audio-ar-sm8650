@@ -72,6 +72,22 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
     return ret;
 }
 
+void AudioVoice::MapCrsVolume(int CrsVolumeIndex) {
+     if (CrsVolumeIndex >= 7)
+        voice_.crsVol = 1.0;
+     else if (CrsVolumeIndex == 6)
+       voice_.crsVol = 0.8;
+     else if (CrsVolumeIndex == 5)
+        voice_.crsVol = 0.6;
+     else if (CrsVolumeIndex == 4)
+       voice_.crsVol = 0.4;
+     else if (CrsVolumeIndex == 3)
+       voice_.crsVol = 0.2;
+     else
+       voice_.crsVol = 0.0;
+     AHAL_DBG("Crs volume is: %f", voice_.crsVol);
+}
+
 int AudioVoice::VoiceSetParameters(const char *kvpairs) {
     int value, i;
     char c_value[32];
@@ -92,6 +108,21 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
     err = str_parms_get_int(parms, AUDIO_PARAMETER_KEY_VSID, &value);
     if (err >= 0) {
         uint32_t vsid = value;
+
+        err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_CRS_ACTIVE, c_value, sizeof(c_value));
+        if (err >= 0) {
+            if (strcmp(c_value, "true") == 0) {
+                AHAL_DBG("CRS param and VSID verified");
+                voice_.crsVsid = vsid;
+            }
+            else {
+                if (vsid == voice_.crsVsid) {
+                    AHAL_DBG("CRS call = false");
+                    voice_.crsVsid = 0;
+                }
+            }
+        }
+
         int call_state = -1;
         err = str_parms_get_int(parms, AUDIO_PARAMETER_KEY_CALL_STATE, &value);
         if (err >= 0) {
@@ -103,7 +134,8 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
         }
 
         if (is_valid_vsid(vsid) && is_valid_call_state(call_state)) {
-            ret = UpdateCallState(vsid, call_state);
+            if (!voice_.crsCall)
+                ret = UpdateCallState(vsid, call_state);
         } else {
             AHAL_ERR("invalid vsid:%x or call_state:%d",
                      vsid, call_state);
@@ -111,6 +143,15 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             goto done;
         }
     }
+
+    err = str_parms_get_int(parms, AUDIO_PARAMETER_KEY_CRS_VOLUME, &value);
+    if (err >= 0) {
+        if (value >= 0)
+            MapCrsVolume(value);
+        else
+            AHAL_ERR("Invalid CRS Volume");
+    }
+
     err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_TTY_MODE, c_value, sizeof(c_value));
     if (err >= 0) {
         if (strcmp(c_value, AUDIO_PARAMETER_VALUE_TTY_OFF) == 0)
@@ -344,6 +385,10 @@ void AudioVoice::VoiceGetParameters(struct str_parms *query, struct str_parms *r
             AHAL_ERR("Error happened for getting TTY mode");
         }
     }
+    ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_CRS_CALL_SUPPORTED, value, sizeof(value));
+    if (ret >= 0) {
+        str_parms_add_int(reply, AUDIO_PARAMETER_KEY_CRS_CALL_SUPPORTED, 1);
+    }
     return;
 }
 
@@ -423,6 +468,7 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
     bool a2dp_capture_suspended = false;
     int retry_cnt = 20;
     const int retry_period_ms = 100;
+    std::set<audio_devices_t> crs_devices;
 
     AHAL_DBG("Enter");
 
@@ -431,7 +477,14 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
         goto exit;
     }
 
-    GetMatchingTxDevices(rx_devices, tx_devices);
+    if(voice_.crsCall && rx_devices.size() > 1) {
+        crs_devices = rx_devices;
+        std::set<audio_devices_t>::iterator pos = crs_devices.find(AUDIO_DEVICE_OUT_SPEAKER);
+        if(pos != crs_devices.end())
+            crs_devices.erase(pos);
+        GetMatchingTxDevices(crs_devices, tx_devices);
+    } else
+        GetMatchingTxDevices(rx_devices, tx_devices);
 
     /**
      * if device_none is in Tx/Rx devices,
@@ -456,7 +509,12 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
     AHAL_DBG("Routing is %d", AudioExtn::get_device_types(rx_devices));
 
     if (stream_out_primary_) {
-        stream_out_primary_->getPalDeviceIds(rx_devices, pal_device_ids);
+        if(voice_.crsCall && rx_devices.size() > 1)
+            stream_out_primary_->getPalDeviceIds(crs_devices, pal_device_ids);
+
+        else
+            stream_out_primary_->getPalDeviceIds(rx_devices, pal_device_ids);
+
         pal_rx_device = pal_device_ids[0];
         memset(pal_device_ids, 0, device_count * sizeof(pal_device_id_t));
         stream_out_primary_->getPalDeviceIds(tx_devices, pal_device_ids);
@@ -468,7 +526,7 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
 
     voice_mutex_.lock();
     if (!IsAnyCallActive()) {
-        if (mode_ == AUDIO_MODE_IN_CALL || mode_ == AUDIO_MODE_CALL_SCREEN) {
+        if (mode_ == AUDIO_MODE_IN_CALL || mode_ == AUDIO_MODE_CALL_SCREEN || voice_.crsCall) {
             voice_.in_call = true;
             ret = UpdateCalls(voice_.session);
         }
@@ -579,6 +637,14 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
         session = &pSession[i];
         AHAL_DBG("cur_state=%d new_state=%d vsid=%x",
                  session->state.current_, session->state.new_, session->vsid);
+
+        if (voice_.crsCall && session->vsid == voice_.crsVsid) {
+            AHAL_DBG("CRS Update call state");
+            if (session->state.current_ == CALL_ACTIVE)
+                session->state.new_ = CALL_INACTIVE;
+            else
+                session->state.new_ = CALL_ACTIVE;
+        }
 
         switch(session->state.new_)
         {
@@ -716,6 +782,12 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
     out_ch_info.ch_map[0] = PAL_CHMAP_CHANNEL_FL;
     out_ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
 
+    if (voice_.crsCall && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET) {
+        AHAL_DBG("CRS force handset to speaker");
+        pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
+        pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
+    }
+
     palDevices[0].id = pal_voice_tx_device_id_;
     palDevices[0].config.ch_info = in_ch_info;
     palDevices[0].config.sample_rate = 48000;
@@ -840,6 +912,35 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
         goto error_open;
     }
 
+    if (voice_.crsCall && palDevices[1].id != PAL_DEVICE_OUT_SPEAKER) {
+        AHAL_DBG("CRS Setup looback device");
+        palDevices[0].id = PAL_DEVICE_OUT_SPEAKER;
+        palDevices[0].config.ch_info = in_ch_info;
+        palDevices[0].config.sample_rate = 48000;
+        palDevices[0].config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        palDevices[0].config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+
+        streamAttributes.type = PAL_STREAM_LOOPBACK;
+        streamAttributes.direction = PAL_AUDIO_OUTPUT;
+        streamAttributes.info.opt_stream_info.loopback_type = PAL_STREAM_LOOPBACK_PLAYBACK_ONLY;
+
+        ret = pal_stream_open(&streamAttributes,
+                          1,
+                          palDevices,
+                          0,
+                          NULL,
+                          NULL,
+                          (uint64_t)this,
+                          &session->pal_voice_loopback_handle);
+
+        AHAL_DBG("pal_stream_open() for loopback device ret:%d", ret);
+        if (ret) {
+            AHAL_ERR("Pal Stream Open Error for loopback device (%x)", ret);
+            ret = -EINVAL;
+            goto error_open;
+        }
+    }
+
     /*apply cached voice effects features*/
     if (session->slow_talk) {
         param_payload = (pal_param_payload *)calloc(1, sizeof(pal_param_payload) +
@@ -921,16 +1022,33 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
       AHAL_DBG("Pal Stream Start Success");
    }
 
+   if (voice_.crsCall && session->pal_voice_loopback_handle) {
+        ret = pal_stream_start(session->pal_voice_loopback_handle);
+        if (ret) {
+            AHAL_ERR("Pal Stream Start Error for loopback device (%x)", ret);
+            ret = pal_stream_close(session->pal_voice_loopback_handle);
+            if (ret)
+                AHAL_ERR("Pal Stream close failed for loopback device %x", ret);
+            session->pal_voice_loopback_handle = NULL;
+            ret = -EINVAL;
+        } else {
+            AHAL_DBG("Pal Stream Start Success for loopback device");
+        }
+    }
+
    /*Apply device mute if needed*/
    if (session->device_mute.mute) {
         ret = SetDeviceMute(session);
    }
+   if (voice_.crsCall) {
+        AHAL_DBG("CRS usecase mute TX");
+       pal_stream_set_mute(session->pal_voice_handle, true);
+   }
 
-   /*apply cached mic mute*/
+    /*apply cached mic mute*/
    if (adevice->mute_) {
        pal_stream_set_mute(session->pal_voice_handle, adevice->mute_);
    }
-
 
 error_open:
     AHAL_DBG("Exit ret: %d", ret);
@@ -972,13 +1090,30 @@ int AudioVoice::VoiceStop(voice_session_t *session) {
 
     AHAL_DBG("Enter");
     if (session && session->pal_voice_handle) {
+        if (voice_.crsCall && session->pal_voice_loopback_handle) {
+            ret = pal_stream_stop(session->pal_voice_loopback_handle);
+            if (ret)
+                AHAL_ERR("Pal Stream stop failed for loopback %x", ret);
+        }
         ret = pal_stream_stop(session->pal_voice_handle);
         if (ret)
             AHAL_ERR("Pal Stream stop failed %x", ret);
+
+        if (voice_.crsCall && session->pal_voice_loopback_handle) {
+            ret = pal_stream_close(session->pal_voice_loopback_handle);
+            if (ret)
+                AHAL_ERR("Pal Stream close failed for loopback %x", ret);
+        }
         ret = pal_stream_close(session->pal_voice_handle);
         if (ret)
             AHAL_ERR("Pal Stream close failed %x", ret);
         session->pal_voice_handle = NULL;
+
+        if (voice_.crsCall) {
+            session->pal_voice_loopback_handle = NULL;
+            voice_.crsCall = false;
+            voice_.in_call = false;
+        }
     }
 
     if (ret)
@@ -993,6 +1128,7 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
     struct pal_channel_info out_ch_info = {0, {0}}, in_ch_info = {0, {0}};
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
     pal_param_payload *param_payload = nullptr;
+    struct pal_stream_attributes streamAttributes;
 
     if (!session) {
         AHAL_ERR("Invalid session");
@@ -1006,6 +1142,26 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
     out_ch_info.channels = 2;
     out_ch_info.ch_map[0] = PAL_CHMAP_CHANNEL_FL;
     out_ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
+
+    //CRS Usecase, should not play through handset
+    if (voice_.crsCall && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET) {
+        AHAL_DBG("CRS force handset to speaker");
+        pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
+        pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
+    }
+
+    if (session->pal_voice_loopback_handle && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_SPEAKER) {
+        AHAL_DBG("CRS teardown for device switch");
+        ret = pal_stream_stop(session->pal_voice_loopback_handle);
+        if (ret)
+            AHAL_ERR("Pal Stream stop failed for loopback %x", ret);
+        ret = pal_stream_close(session->pal_voice_loopback_handle);
+        if (ret)
+            AHAL_ERR("Pal Stream close failed for loopback %x", ret);
+        session->pal_voice_loopback_handle = NULL;
+    }
+    if (voice_.crsCall)
+       SetVoiceVolume(voice_.crsVol);
 
     palDevices[0].id = pal_voice_tx_device_id_;
     palDevices[0].config.ch_info = in_ch_info;
@@ -1137,6 +1293,61 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
         }
     } else {
         AHAL_ERR("Voice handle not found");
+    }
+
+    if (session && session->pal_voice_handle &&
+        voice_.crsCall && palDevices[1].id != PAL_DEVICE_OUT_SPEAKER && !session->pal_voice_loopback_handle) {
+        AHAL_DBG("CRS Device switch: setup new device");
+        palDevices[0].id = PAL_DEVICE_OUT_SPEAKER;
+        palDevices[0].config.ch_info = in_ch_info;
+        palDevices[0].config.sample_rate = 48000;
+        palDevices[0].config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        palDevices[0].config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+
+        memset(&streamAttributes, 0, sizeof(streamAttributes));
+        streamAttributes.info.voice_call_info.VSID = session->vsid;
+        streamAttributes.info.voice_call_info.tty_mode = session->tty_mode;
+        streamAttributes.type = PAL_STREAM_LOOPBACK;
+        streamAttributes.direction = PAL_AUDIO_OUTPUT;
+        streamAttributes.info.opt_stream_info.loopback_type = PAL_STREAM_LOOPBACK_PLAYBACK_ONLY;
+        streamAttributes.in_media_config.sample_rate = 48000;
+        streamAttributes.in_media_config.ch_info = in_ch_info;
+        streamAttributes.in_media_config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        streamAttributes.in_media_config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+        streamAttributes.out_media_config.sample_rate = 48000;
+        streamAttributes.out_media_config.ch_info = out_ch_info;
+        streamAttributes.out_media_config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        streamAttributes.out_media_config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+
+        ret = pal_stream_open(&streamAttributes,
+                          1,
+                          palDevices,
+                          0,
+                          NULL,
+                          NULL,
+                          (uint64_t)this,
+                          &session->pal_voice_loopback_handle);
+
+        AHAL_DBG("pal_stream_open() for loopback device ret:%d", ret);
+        if (ret) {
+            AHAL_ERR("Pal Stream Open Error for loopback device (%x)", ret);
+            ret = -EINVAL;
+            goto exit;
+        }
+
+        if (voice_.crsCall && session->pal_voice_loopback_handle) {
+            ret = pal_stream_start(session->pal_voice_loopback_handle);
+            if (ret) {
+                AHAL_ERR("Pal Stream Start Error for loopback device (%x)", ret);
+                ret = pal_stream_close(session->pal_voice_loopback_handle);
+                if (ret)
+                    AHAL_ERR("Pal Stream close failed for loopback device %x", ret);
+                session->pal_voice_loopback_handle = NULL;
+                ret = -EINVAL;
+            }
+        }
+        else
+            AHAL_DBG("Pal Stream Start Success for loopback device");
     }
 
     /* apply device mute if needed*/
@@ -1288,7 +1499,8 @@ AudioVoice::AudioVoice() {
 
     voice_.session[MMODE1_SESS_IDX].vsid = VOICEMMODE1_VSID;
     voice_.session[MMODE2_SESS_IDX].vsid = VOICEMMODE2_VSID;
-
+    voice_.crsVsid = 0;
+    voice_.crsVol = 0;
     stream_out_primary_ = NULL;
 }
 
