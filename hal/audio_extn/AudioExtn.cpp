@@ -1003,13 +1003,15 @@ void AudioExtn::audio_extn_perf_lock_release(int *handle)
 // START: compress_capture =====================================================
 namespace CompressCapture {
 
-bool CompressAAC::setParameters(str_parms *parms) {
+bool CompressAAC::setParameters(pal_stream_handle_t *palHandle,
+                                str_parms *parms) {
+
     int32_t value = 0;
     bool status = true;
 
     /* query for AAC bitrate */
     if (!str_parms_get_int(parms, kAudioParameterDSPAacBitRate, &value)) {
-        status = setDSPBitRate(value);
+        status = setDSPBitRate(palHandle, value);
     }
     /* query for global cutoff frequency*/
     if (!str_parms_get_int(parms, kAudioParameterDSPAacGlobalCutoffFrequency,
@@ -1029,7 +1031,8 @@ bool CompressAAC::setParameters(str_parms *parms) {
     return status;
 }
 
-bool CompressAAC::setDSPBitRate(int32_t reqBitRate){
+bool CompressAAC::setDSPBitRate(pal_stream_handle_t *palHandle,
+                                int32_t reqBitRate) {
     int32_t minValue = getAACMinBitrateValue();
     int32_t maxValue = getAACMaxBitrateValue();
     AHAL_INFO("client requested AAC bitrate: %d", reqBitRate);
@@ -1044,20 +1047,28 @@ bool CompressAAC::setDSPBitRate(int32_t reqBitRate){
     if (!mIsConfigured) {
         return  true;
     }
-    /*
-    Todo configure Dynamic bitrate
-    mCompressStreamAdjBitRate = bitRate;
-    TAG_STREAM_PLACEHOLDER_ENCODER
-    if(mEncoderModuleId == 0){
-        pal_tag_module_info
+
+    if (!palHandle) {
+        AHAL_ERR("dynamic bitrate config failed due to invalid pal handle");
+        return false;
     }
-    struct apm_module_param_data_t *header;
-    struct param_id_encoder_output_config_t *enc_out_conf_param;
-     param_id_enc_bitrate_param_t
-    pal_tag_module_info
-    pal_tag_module_mapping
-    pal_stream_get_tags_with_module_info
-    */
+
+    mPalSndEnc.aac_enc.aac_bit_rate = mCompressStreamAdjBitRate;
+    const auto palSndEncSize = sizeof(pal_snd_enc_t);
+    auto payload =
+        std::make_unique<uint8_t[]>(sizeof(pal_param_payload) + palSndEncSize);
+    auto paramPayload = (pal_param_payload *)payload.get();
+    paramPayload->payload_size = palSndEncSize;
+    memcpy(paramPayload->payload, &mPalSndEnc, paramPayload->payload_size);
+
+    int32_t ret;
+    ret = pal_stream_set_param(palHandle, PAL_PARAM_ID_RECONFIG_ENCODER,
+                               paramPayload);
+    if (ret) {
+        AHAL_ERR("pal set param PAL_PARAM_ID_RECONFIG_ENCODER failed: %d", ret);
+        return false;
+    }
+
     return true;
 }
 
@@ -1165,40 +1176,40 @@ bool CompressAAC::configure(pal_stream_handle_t *palHandle) {
         AHAL_ERR("allocation failed");
         return false;
     }
-    pal_snd_enc_t palSndEnc{};
+
     auto *param_payload =
         reinterpret_cast<pal_param_payload *>(paramPayload.get());
 
     param_payload->payload_size = sizeof(pal_snd_enc_t);
 
     if (mFormat == AUDIO_FORMAT_AAC_LC || mFormat == AUDIO_FORMAT_AAC_ADTS_LC) {
-        palSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::LC;
-        palSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
+        mPalSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::LC;
+        mPalSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
     } else if (mFormat == AUDIO_FORMAT_AAC_ADTS_HE_V1) {
-        palSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::SBR;
-        palSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
+        mPalSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::SBR;
+        mPalSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
     } else if (mFormat == AUDIO_FORMAT_AAC_ADTS_HE_V2) {
-        palSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::PS;
-        palSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
+        mPalSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::PS;
+        mPalSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
     }
 
     if (mCompressStreamAdjBitRate != -1) {
-        palSndEnc.aac_enc.aac_bit_rate = mCompressStreamAdjBitRate;
+        mPalSndEnc.aac_enc.aac_bit_rate = mCompressStreamAdjBitRate;
         AHAL_DBG("compress aac bitrate configured: %d",
-                 palSndEnc.aac_enc.aac_bit_rate);
+                 mPalSndEnc.aac_enc.aac_bit_rate);
     } else {
         AHAL_WARN("compress aac default %d bps configured", kAacDefaultBitrate);
-        mCompressStreamAdjBitRate = palSndEnc.aac_enc.aac_bit_rate =
+        mCompressStreamAdjBitRate = mPalSndEnc.aac_enc.aac_bit_rate =
             kAacDefaultBitrate;
     }
 
     if(mCutoffFrequency != -1){
-        palSndEnc.aac_enc.global_cutoff_freq = mCutoffFrequency;
+        mPalSndEnc.aac_enc.global_cutoff_freq = mCutoffFrequency;
         AHAL_DBG("compress aac global cutoff frequency requested: %d",
-                 palSndEnc.aac_enc.global_cutoff_freq);
+                 mPalSndEnc.aac_enc.global_cutoff_freq);
     }
 
-    memcpy(param_payload->payload, &palSndEnc, param_payload->payload_size);
+    memcpy(param_payload->payload, &mPalSndEnc, param_payload->payload_size);
     int32_t ret = pal_stream_set_param(palHandle, PAL_PARAM_ID_CODEC_CONFIGURATION,
                                param_payload);
     if (ret) {
@@ -1207,7 +1218,6 @@ bool CompressAAC::configure(pal_stream_handle_t *palHandle) {
         return false;
     } else {
         mIsConfigured = true;
-        mPalHandle = *palHandle;
         return true;
     }
 }

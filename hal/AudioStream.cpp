@@ -4453,9 +4453,9 @@ int StreamInPrimary::SetParameters(const char* kvpairs) {
         goto exit;
 
     if (usecase_ == USECASE_AUDIO_RECORD_COMPRESS) {
-        if (!mCompressEncoder->setParameters(parms)) {
-             ret = -EINVAL;
-         }
+        if (!mCompressEncoder->setParameters(pal_stream_handle_, parms)) {
+            ret = -EINVAL;
+        }
     }
 
     str_parms_destroy(parms);

@@ -156,10 +156,10 @@ class CompressAAC {
 
     int32_t getAACMaxBitrateValue();
 
-    bool setParameters(str_parms *parms);
+    bool setParameters(pal_stream_handle_t *palHandle, str_parms *parms);
     bool getParameters(struct str_parms *query, struct str_parms *reply);
     bool configure(pal_stream_handle_t *palHandle);
-    bool setDSPBitRate(int32_t bitRate);
+    bool setDSPBitRate(pal_stream_handle_t *palHandle, int32_t bitRate);
     bool supportsCutOffFrequency() const;
     uint32_t getPCMSamplesPerFrame() const { return mPCMSamplesPerFrame; }
     uint64_t getFramesRead() const {
@@ -179,9 +179,7 @@ class CompressAAC {
                                   : kHeAacPCMSamplesPerFrame),
           mCompressStreamAdjBitRate(-1),
           mCutoffFrequency(-1),
-          mCompressReadCalls(0),
-          mEncoderModuleId(0),
-          mPalHandle(0) {}
+          mCompressReadCalls(0) {}
 
     ~CompressAAC() = default;
 
@@ -202,10 +200,9 @@ class CompressAAC {
     bool mIsConfigured;
     uint32_t mSampleRate;
     uint32_t mChannelCount;
-    uint32_t mEncoderModuleId;
     uint32_t mPCMSamplesPerFrame;
     audio_format_t mFormat;
-    pal_stream_handle_t mPalHandle;
+    pal_snd_enc_t mPalSndEnc{};
 };
 }  // namespace CompressCapture
 // end of CompressCapture
