@@ -60,9 +60,7 @@
 #define AUDIO_PARAMETER_VALUE_TTY_VCO "tty_vco"
 #define AUDIO_PARAMETER_VALUE_TTY_HCO "tty_hco"
 #define AUDIO_PARAMETER_VALUE_TTY_FULL "tty_full"
-#define AUDIO_PARAMETER_KEY_CRS_CALL_SUPPORTED "isCRSsupported"
-#define AUDIO_PARAMETER_KEY_CRS_ACTIVE "crs_call"
-#define AUDIO_PARAMETER_KEY_CRS_VOLUME "CRS_volume"
+
 #define CODEC_BACKEND_DEFAULT_BIT_WIDTH 16
 
 class AudioVoice {
@@ -76,8 +74,6 @@ public:
             uint32_t vsid;
             uint32_t tty_mode;
             pal_stream_handle_t*  pal_voice_handle;
-            pal_stream_handle_t* pal_voice_loopback_handle;
-
             bool volume_boost;
             bool slow_talk;
             bool hd_voice;
@@ -88,9 +84,6 @@ public:
     struct voice_t {
             voice_session_t session[MAX_VOICE_SESSIONS];
             bool in_call;
-            bool crsCall;
-            uint32_t crsVsid;
-            float crsVol;
     };
     voice_t voice_;
     audio_mode_t mode_;
@@ -113,7 +106,6 @@ public:
     int UpdateCalls(voice_session_t *pSession);
     int SetMicMute(bool mute);
     int SetVoiceVolume(float volume);
-    void MapCrsVolume(int CrsVolumeIndex);
     int GetMatchingTxDevices(const std::set<audio_devices_t>& rx_devs,
                              std::set<audio_devices_t>& tx_devs);
     bool IsCallActive(voice_session_t *pSession);
