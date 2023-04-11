@@ -116,7 +116,9 @@ class AudioPatch{
             PATCH_NONE = -1,
             PATCH_PLAYBACK,
             PATCH_CAPTURE,
-            PATCH_DEVICE_LOOPBACK
+            PATCH_DEVICE_LOOPBACK,
+            PATCH_DEVICE_CRS,
+            PATCH_END_CRS
         };
         AudioPatch() = default;
         AudioPatch(PatchType patch_type,
