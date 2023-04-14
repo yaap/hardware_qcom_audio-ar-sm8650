@@ -160,6 +160,7 @@ class CompressAAC {
     bool getParameters(struct str_parms *query, struct str_parms *reply);
     bool configure(pal_stream_handle_t *palHandle);
     bool setDSPBitRate(int32_t bitRate);
+    bool supportsCutOffFrequency() const;
     uint32_t getPCMSamplesPerFrame() const { return mPCMSamplesPerFrame; }
     uint64_t getFramesRead() const {
         return mCompressReadCalls * mPCMSamplesPerFrame;

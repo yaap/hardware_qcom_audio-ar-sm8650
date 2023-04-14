@@ -1014,12 +1014,15 @@ bool CompressAAC::setParameters(str_parms *parms) {
     /* query for global cutoff frequency*/
     if (!str_parms_get_int(parms, kAudioParameterDSPAacGlobalCutoffFrequency,
                            &value)) {
-        if (!mIsConfigured && mFormat == AUDIO_FORMAT_AAC_LC) {
-            /*Todo configure cutoff frequency*/
+        if (!mIsConfigured && supportsCutOffFrequency()) {
             mCutoffFrequency = value;
-            AHAL_INFO("client requested AAC LC cutoff frequency:%d", value);
+            AHAL_INFO("client requested AAC LC cutoff frequency: %d",
+                      mCutoffFrequency);
         } else {
-            AHAL_WARN("can't configure AAC LC cutoff frequency: %d", value);
+            AHAL_WARN(
+                "encoder already configured or can't set cutoff frequency "
+                "unless LC mode: %d",
+                value);
         }
     }
 
@@ -1189,6 +1192,12 @@ bool CompressAAC::configure(pal_stream_handle_t *palHandle) {
             kAacDefaultBitrate;
     }
 
+    if(mCutoffFrequency != -1){
+        palSndEnc.aac_enc.global_cutoff_freq = mCutoffFrequency;
+        AHAL_DBG("compress aac global cutoff frequency requested: %d",
+                 palSndEnc.aac_enc.global_cutoff_freq);
+    }
+
     memcpy(param_payload->payload, &palSndEnc, param_payload->payload_size);
     int32_t ret = pal_stream_set_param(palHandle, PAL_PARAM_ID_CODEC_CONFIGURATION,
                                param_payload);
@@ -1201,6 +1210,13 @@ bool CompressAAC::configure(pal_stream_handle_t *palHandle) {
         mPalHandle = *palHandle;
         return true;
     }
+}
+
+bool CompressAAC::supportsCutOffFrequency() const {
+    if (mFormat == AUDIO_FORMAT_AAC_LC /* only allowed for LC mode*/) {
+        return true;
+    }
+    return false;
 }
 
 }  // namespace CompressCapture
