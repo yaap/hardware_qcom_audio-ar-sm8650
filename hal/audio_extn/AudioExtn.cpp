@@ -565,7 +565,8 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
 {
     int ret = 0;
     pal_param_bta2dp_t param_bt_a2dp;
-    AHAL_DBG("reconfig_cb enter");
+    AHAL_DBG("reconfig_cb enter with state %s for %s", reconfigStateName.at(state).c_str(),
+        deviceNameLUT.at(SessionTypePalDevMap.at(session_type)).c_str());
 
     /* If reconfiguration is in progress state (state = 0), perform a2dp suspend.
      * If reconfiguration is in complete state (state = 1), perform a2dp resume.
@@ -573,37 +574,39 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
      * Set LC3 channel mode as stereo (state = 3).
      */
     if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_ENCODING_DATAPATH) {
-        if (state == 0) {
+        if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 1) {
+        } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
             param_bt_a2dp.a2dp_suspended = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 2) {
+        } else if ((tRECONFIG_STATE)state == CHANNEL_MONO) {
             param_bt_a2dp.is_lc3_mono_mode_on = true;
+
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_LC3_CONFIG, (void*)&param_bt_a2dp,
                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 3) {
+        } else if ((tRECONFIG_STATE)state == CHANNEL_STEREO) {
             param_bt_a2dp.is_lc3_mono_mode_on = false;
+
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_LC3_CONFIG, (void*)&param_bt_a2dp,
                 sizeof(pal_param_bta2dp_t));
         }
     } else if (session_type == LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH) {
-        if (state == 0) {
+        if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_capture_suspended = true;
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 1) {
+        } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
             param_bt_a2dp.a2dp_capture_suspended = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
@@ -611,14 +614,14 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
                                 sizeof(pal_param_bta2dp_t));
         }
     } else if (session_type == A2DP_HARDWARE_OFFLOAD_DATAPATH) {
-        if (state == 0) {
+        if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
-        } else if (state == 1) {
+        } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
             param_bt_a2dp.a2dp_suspended = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
@@ -626,7 +629,8 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
                                 sizeof(pal_param_bta2dp_t));
         }
     }
-    AHAL_ERR("reconfig_cb exit");
+    AHAL_DBG("reconfig_cb exit with state %s for %s", reconfigStateName.at(state).c_str(),
+        deviceNameLUT.at(SessionTypePalDevMap.at(session_type)).c_str());
     return ret;
 }
 
@@ -997,111 +1001,233 @@ void AudioExtn::audio_extn_perf_lock_release(int *handle)
 //END: KPI_OPTIMIZE =============================================================================
 
 // START: compress_capture =====================================================
+namespace CompressCapture {
 
-std::vector<uint32_t> CompressCapture::sAacSampleRates = {
-    8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000};
+bool CompressAAC::setParameters(pal_stream_handle_t *palHandle,
+                                str_parms *parms) {
 
-std::unordered_map<uint32_t, int32_t>
-    CompressCapture::sSampleRateToDefaultBitRate = {
-        {8000, 36000},   {11025, 48000},  {12000, 56000},
-        {16000, 64000},  {22050, 82500},  {24000, 96000},
-        {32000, 110000}, {44100, 128000}, {48000, 156000}};
-
-bool CompressCapture::parseMetadata(str_parms *parms,
-                                    struct audio_config *config,
-                                    int32_t &compressStreamAdjBitRate) {
-    bool ret = false;
     int32_t value = 0;
+    bool status = true;
 
-    if (config->format == AUDIO_FORMAT_AAC_LC ||
-        config->format == AUDIO_FORMAT_AAC_ADTS_LC ||
-        config->format == AUDIO_FORMAT_AAC_ADTS_HE_V1 ||
-        config->format == AUDIO_FORMAT_AAC_ADTS_HE_V2) {
-        /* query for AAC bitrate */
-        if (!str_parms_get_int(parms, kAudioParameterDSPAacBitRate,
-                               &value)) {
-            uint32_t channelCount =
-                audio_channel_count_from_in_mask(config->channel_mask);
-            int32_t minValue = 0;
-            int32_t maxValue = UINT32_MAX;
-            auto it = std::find(sAacSampleRates.cbegin(),
-                                sAacSampleRates.cend(), config->sample_rate);
-            if (it != sAacSampleRates.cend() &&
-                getAACMinBitrateValue(config->sample_rate, channelCount,
-                                      minValue) &&
-                getAACMaxBitrateValue(config->sample_rate, channelCount,
-                                      maxValue)) {
-                AHAL_INFO("client requested AAC bitrate: %d", value);
-                if (value < minValue) {
-                    value = minValue;
-                    AHAL_WARN("Adjusting AAC bitrate to minimum: %d", value);
-                } else if (value > maxValue) {
-                    value = maxValue;
-                    AHAL_WARN("Adjusting AAC bitrate to maximum: %d", value);
-                }
-                compressStreamAdjBitRate = value;
-                ret = true;
-            }
+    /* query for AAC bitrate */
+    if (!str_parms_get_int(parms, kAudioParameterDSPAacBitRate, &value)) {
+        status = setDSPBitRate(palHandle, value);
+    }
+    /* query for global cutoff frequency*/
+    if (!str_parms_get_int(parms, kAudioParameterDSPAacGlobalCutoffFrequency,
+                           &value)) {
+        if (!mIsConfigured && supportsCutOffFrequency()) {
+            mCutoffFrequency = value;
+            AHAL_INFO("client requested AAC LC cutoff frequency: %d",
+                      mCutoffFrequency);
+        } else {
+            AHAL_WARN(
+                "encoder already configured or can't set cutoff frequency "
+                "unless LC mode: %d",
+                value);
         }
     }
 
-    return ret;
+    return status;
 }
 
-bool CompressCapture::getAACMinBitrateValue(uint32_t sampleRate,
-                                            uint32_t channelCount,
-                                            int32_t &minValue) {
-    if (channelCount == 1) {
-        minValue = kAacMonoMinSupportedBitRate;
-    } else if (channelCount == 2) {
-        minValue = kAacStereoMinSupportedBitRate;
-    } else {
+bool CompressAAC::setDSPBitRate(pal_stream_handle_t *palHandle,
+                                int32_t reqBitRate) {
+    int32_t minValue = getAACMinBitrateValue();
+    int32_t maxValue = getAACMaxBitrateValue();
+    AHAL_INFO("client requested AAC bitrate: %d", reqBitRate);
+    if (reqBitRate < minValue) {
+        reqBitRate = minValue;
+        AHAL_WARN("Adjusting AAC bitrate to minimum: %d", reqBitRate);
+    } else if (reqBitRate > maxValue) {
+        reqBitRate = maxValue;
+        AHAL_WARN("Adjusting AAC bitrate to maximum: %d", reqBitRate);
+    }
+    mCompressStreamAdjBitRate = reqBitRate;
+    if (!mIsConfigured) {
+        return  true;
+    }
+
+    if (!palHandle) {
+        AHAL_ERR("dynamic bitrate config failed due to invalid pal handle");
         return false;
     }
+
+    mPalSndEnc.aac_enc.aac_bit_rate = mCompressStreamAdjBitRate;
+    const auto palSndEncSize = sizeof(pal_snd_enc_t);
+    auto payload =
+        std::make_unique<uint8_t[]>(sizeof(pal_param_payload) + palSndEncSize);
+    auto paramPayload = (pal_param_payload *)payload.get();
+    paramPayload->payload_size = palSndEncSize;
+    memcpy(paramPayload->payload, &mPalSndEnc, paramPayload->payload_size);
+
+    int32_t ret;
+    ret = pal_stream_set_param(palHandle, PAL_PARAM_ID_RECONFIG_ENCODER,
+                               paramPayload);
+    if (ret) {
+        AHAL_ERR("pal set param PAL_PARAM_ID_RECONFIG_ENCODER failed: %d", ret);
+        return false;
+    }
+
     return true;
 }
 
-bool CompressCapture::getAACMaxBitrateValue(uint32_t sampleRate,
-                                            uint32_t channelCount,
-                                            int32_t &maxValue) {
-    if (channelCount == 1) {
-        maxValue = (int32_t)std::min((uint32_t)kAacMonoMaxSupportedBitRate,
-                                     6 * sampleRate);
-    } else if (channelCount == 2) {
-        maxValue = (int32_t)std::min((uint32_t)kAacStereoMaxSupportedBitRate,
-                                     12 * sampleRate);
-    } else {
-        return false;
+bool CompressAAC::getParameters(struct str_parms *query,
+                                struct str_parms *reply) {
+    char value[256];
+    // query for AAC bitrate
+    if (str_parms_get_str(query, CompressAAC::kAudioParameterDSPAacBitRate,
+                          value, sizeof(value)) >= 0) {
+        // fill in the AAC bitrate
+        if (mCompressStreamAdjBitRate != -1 &&
+            (str_parms_add_int(reply, kAudioParameterDSPAacBitRate,
+                               mCompressStreamAdjBitRate) >= 0)) {
+        }
     }
+
+    if (str_parms_get_str(
+            query, CompressAAC::kAudioParameterDSPAacGlobalCutoffFrequency,
+            value, sizeof(value)) >= 0) {
+        // fill in the AAC bitrate
+        if (mCutoffFrequency != -1 &&
+            (str_parms_add_int(reply,
+                               kAudioParameterDSPAacGlobalCutoffFrequency,
+                               mCutoffFrequency) >= 0)) {
+        }
+    }
+
     return true;
 }
 
-bool CompressCapture::getAACMaxBufferSize(struct audio_config *config,
-                                          uint32_t &maxBufSize) {
-    int32_t maxBitRate = 0;
-    if (getAACMaxBitrateValue(
-            config->sample_rate,
-            audio_channel_count_from_in_mask(config->channel_mask),
-            maxBitRate)) {
-        /**
-         * AAC Encoder 1024 PCM samples => 1 compress AAC frame;
-         * 1 compress AAC frame => max possible length => max-bitrate bits;
-         * let's take example of 48K HZ;
-         * 1 second ==> 384000 bits ; 1 second ==> 48000 PCM samples;
-         * 1 AAC frame ==> 1024 PCM samples;
-         * Max buffer size possible;
-         * 48000/1024 = (8/375) seconds ==> ( 8/375 ) * 384000 bits
-         *     ==> ( (8/375) * 384000 / 8 ) bytes;
-         **/
-        maxBufSize = (uint32_t)((((((double)kAacPCMSamplesPerFrame) /
-                                   config->sample_rate) *
-                                  ((uint32_t)(maxBitRate))) /
-                                 8) +
-                                /* Just in case; not to miss precision */ 1);
+int32_t CompressAAC::getAACMinBitrateValue() {
+    if (mFormat == AUDIO_FORMAT_AAC_LC) {
+        if (mChannelCount == 1) {
+            return kAacLcMonoMinSupportedBitRate;
+        } else {
+            return kAacLcStereoMinSupportedBitRate;
+        }
+    } else if (mFormat == AUDIO_FORMAT_AAC_ADTS_HE_V1) {
+        if (mChannelCount == 1) {
+            return (mSampleRate == 24000 || mSampleRate == 32000)
+                       ? kHeAacMonoMinSupportedBitRate1
+                       : kHeAacMonoMinSupportedBitRate2;
+        } else {
+            return (mSampleRate == 24000 || mSampleRate == 32000)
+                       ? kHeAacStereoMinSupportedBitRate1
+                       : kHeAacStereoMinSupportedBitRate2;
+        }
+    } else {
+        // AUDIO_FORMAT_AAC_ADTS_HE_V2
+        return (mSampleRate == 24000 || mSampleRate == 32000)
+                   ? kHeAacPsStereoMinSupportedBitRate1
+                   : kHeAacPsStereoMinSupportedBitRate2;
+    }
+}
+
+int32_t CompressAAC::getAACMaxBitrateValue() {
+    if (mFormat == AUDIO_FORMAT_AAC_LC) {
+        if (mChannelCount == 1) {
+            return (int32_t)std::min((uint32_t)kAacLcMonoMaxSupportedBitRate,
+                                     6 * mSampleRate);
+        } else {
+            return (int32_t)std::min((uint32_t)kAacLcStereoMaxSupportedBitRate,
+                                     12 * mSampleRate);
+        }
+    } else if (mFormat == AUDIO_FORMAT_AAC_ADTS_HE_V1) {
+        if (mChannelCount == 1) {
+            return (int32_t)std::min((uint32_t)kHeAacMonoMaxSupportedBitRate,
+                                     6 * mSampleRate);
+        } else {
+            return (int32_t)std::min((uint32_t)kHeAacStereoMaxSupportedBitRate,
+                                     12 * mSampleRate);
+        }
+    } else {
+        // AUDIO_FORMAT_AAC_ADTS_HE_V2
+        return (int32_t)std::min((uint32_t)kHeAacPstereoMaxSupportedBitRate,
+                                 6 * mSampleRate);
+    }
+}
+
+uint32_t CompressAAC::getAACMaxBufferSize() {
+    int32_t maxBitRate = getAACMaxBitrateValue();
+    /**
+     * AAC Encoder 1024 PCM samples => 1 compress AAC frame;
+     * 1 compress AAC frame => max possible length => max-bitrate bits;
+     * let's take example of 48K HZ;
+     * 1 second ==> 384000 bits ; 1 second ==> 48000 PCM samples;
+     * 1 AAC frame ==> 1024 PCM samples;
+     * Max buffer size possible;
+     * 48000/1024 = (8/375) seconds ==> ( 8/375 ) * 384000 bits
+     *     ==> ( (8/375) * 384000 / 8 ) bytes;
+     **/
+    return (uint32_t)((((((double)mPCMSamplesPerFrame) / mSampleRate) *
+                        ((uint32_t)(maxBitRate))) /
+                       8) +
+                      /* Just in case; not to miss precision */ 1);
+}
+
+bool CompressAAC::configure(pal_stream_handle_t *palHandle) {
+    if (!palHandle) {
+        return false;
+    }
+    auto paramPayload = std::make_unique<uint8_t[]>(sizeof(pal_param_payload) +
+                                                    sizeof(pal_snd_enc_t));
+    if (!paramPayload) {
+        AHAL_ERR("allocation failed");
+        return false;
+    }
+
+    auto *param_payload =
+        reinterpret_cast<pal_param_payload *>(paramPayload.get());
+
+    param_payload->payload_size = sizeof(pal_snd_enc_t);
+
+    if (mFormat == AUDIO_FORMAT_AAC_LC || mFormat == AUDIO_FORMAT_AAC_ADTS_LC) {
+        mPalSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::LC;
+        mPalSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
+    } else if (mFormat == AUDIO_FORMAT_AAC_ADTS_HE_V1) {
+        mPalSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::SBR;
+        mPalSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
+    } else if (mFormat == AUDIO_FORMAT_AAC_ADTS_HE_V2) {
+        mPalSndEnc.aac_enc.enc_cfg.aac_enc_mode = EncodingMode::PS;
+        mPalSndEnc.aac_enc.enc_cfg.aac_fmt_flag = EncodingFormat::ADTS;
+    }
+
+    if (mCompressStreamAdjBitRate != -1) {
+        mPalSndEnc.aac_enc.aac_bit_rate = mCompressStreamAdjBitRate;
+        AHAL_DBG("compress aac bitrate configured: %d",
+                 mPalSndEnc.aac_enc.aac_bit_rate);
+    } else {
+        AHAL_WARN("compress aac default %d bps configured", kAacDefaultBitrate);
+        mCompressStreamAdjBitRate = mPalSndEnc.aac_enc.aac_bit_rate =
+            kAacDefaultBitrate;
+    }
+
+    if(mCutoffFrequency != -1){
+        mPalSndEnc.aac_enc.global_cutoff_freq = mCutoffFrequency;
+        AHAL_DBG("compress aac global cutoff frequency requested: %d",
+                 mPalSndEnc.aac_enc.global_cutoff_freq);
+    }
+
+    memcpy(param_payload->payload, &mPalSndEnc, param_payload->payload_size);
+    int32_t ret = pal_stream_set_param(palHandle, PAL_PARAM_ID_CODEC_CONFIGURATION,
+                               param_payload);
+    if (ret) {
+        AHAL_ERR("pal set param PAL_PARAM_ID_CODEC_CONFIGURATION failed: %d",
+                 ret);
+        return false;
+    } else {
+        mIsConfigured = true;
         return true;
     }
+}
 
+bool CompressAAC::supportsCutOffFrequency() const {
+    if (mFormat == AUDIO_FORMAT_AAC_LC /* only allowed for LC mode*/) {
+        return true;
+    }
     return false;
 }
 
+}  // namespace CompressCapture
 // END: compress_capture =======================================================

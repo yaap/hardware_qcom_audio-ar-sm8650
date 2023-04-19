@@ -70,8 +70,6 @@
 #define XML_READ_BUFFER_SIZE 1024
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-#define COMPRESS_CAPTURE_AAC_MAX_OUTPUT_BUFFER_SIZE 2048
-#define COMPRESS_CAPTURE_AAC_PCM_SAMPLES_IN_FRAME 1024
 
 typedef enum {
     TAG_MICROPHONE_CHARACTERISTIC,
@@ -208,6 +206,7 @@ public:
     bool usb_input_dev_enabled = false;
     bool usb_out_headset = false;
     static bool mic_characteristics_available;
+    bool icmd_playback = false;
     static microphone_characteristics_t microphones;
     static snd_device_to_mic_map_t microphone_maps[PAL_MAX_INPUT_DEVICES];
     static bool find_enum_by_string(const struct audio_string_to_enum * table, const char * name,
@@ -238,7 +237,7 @@ protected:
     std::mutex out_list_mutex;
     std::mutex in_list_mutex;
     std::mutex patch_map_mutex;
-    btsco_lc3_cfg_t btsco_lc3_cfg;
+    static btsco_lc3_cfg_t btsco_lc3_cfg;
     bool bt_lc3_speech_enabled;
     void *offload_effects_lib_;
     offload_effects_start_output fnp_offload_effect_start_output_ = nullptr;
