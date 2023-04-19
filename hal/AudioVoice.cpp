@@ -806,6 +806,9 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
         pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
     }
 
+    if (voice_.crsCall)
+       SetVoiceVolume(voice_.crsVol);
+
     palDevices[0].id = pal_voice_tx_device_id_;
     palDevices[0].config.ch_info = in_ch_info;
     palDevices[0].config.sample_rate = 48000;
@@ -940,7 +943,7 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
     if (voice_.crsCall && palDevices[1].id != PAL_DEVICE_OUT_SPEAKER) {
         AHAL_DBG("CRS Setup looback device");
         palDevices[0].id = PAL_DEVICE_OUT_SPEAKER;
-        palDevices[0].config.ch_info = in_ch_info;
+        palDevices[0].config.ch_info = out_ch_info;
         palDevices[0].config.sample_rate = 48000;
         palDevices[0].config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
         palDevices[0].config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
@@ -1331,7 +1334,7 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
         voice_.crsCall && palDevices[1].id != PAL_DEVICE_OUT_SPEAKER && !session->pal_voice_loopback_handle) {
         AHAL_DBG("CRS Device switch: setup new device");
         palDevices[0].id = PAL_DEVICE_OUT_SPEAKER;
-        palDevices[0].config.ch_info = in_ch_info;
+        palDevices[0].config.ch_info = out_ch_info;
         palDevices[0].config.sample_rate = 48000;
         palDevices[0].config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
         palDevices[0].config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
