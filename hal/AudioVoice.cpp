@@ -838,7 +838,7 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
             } else {
                 /*Need to add support for 3-pole Wired Headset */
                  palDevices[0].id = PAL_DEVICE_IN_WIRED_HEADSET;
-	    }
+            }
         }
         else {
             AHAL_ERR("Invalid device pair for the usecase");
@@ -893,6 +893,13 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
         strlcpy(palDevices[1].custom_config.custom_key, "HAC",
                     sizeof(palDevices[1].custom_config.custom_key));
         AHAL_INFO("Setting custom key as %s", palDevices[0].custom_config.custom_key);
+    }
+
+    /*set custom key for crsCall mode to force ringtone to play in stereo speaker and allow SVA concurrency*/
+    if (voice_.crsCall) {
+        strlcpy(palDevices[1].custom_config.custom_key, "crsCall",
+                  sizeof(palDevices[1].custom_config.custom_key));
+        AHAL_INFO("Setting custom key as %s", palDevices[1].custom_config.custom_key);
     }
 
     //streamAttributes.in_media_config.ch_info = ch_info;
@@ -1282,6 +1289,13 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
     } else {
         strlcpy(palDevices[0].custom_config.custom_key, "",
                 sizeof(palDevices[0].custom_config.custom_key));
+    }
+
+    /*set custom key for crsCall mode to force ringtone to play in stereo speaker and allow SVA concurrency*/
+    if (voice_.crsCall) {
+        strlcpy(palDevices[1].custom_config.custom_key, "crsCall",
+                  sizeof(palDevices[1].custom_config.custom_key));
+        AHAL_INFO("Setting custom key as %s", palDevices[1].custom_config.custom_key);
     }
 
     if (session && session->pal_voice_handle) {
