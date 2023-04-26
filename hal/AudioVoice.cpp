@@ -167,7 +167,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             goto done;
         }
 
-        for ( i = 0; i < max_voice_sessions_; i++) {
+        for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
             voice_.session[i].tty_mode = tty_mode;
             if (IsCallActive(&voice_.session[i])) {
                 params = (pal_param_payload *)calloc(1,
@@ -211,7 +211,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             params->payload_size = sizeof(volume_boost);
             params->payload[0] = volume_boost;
 
-            for ( i = 0; i < max_voice_sessions_; i++) {
+            for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
                 voice_.session[i].volume_boost = volume_boost;
                 if (IsCallActive(&voice_.session[i])) {
                     pal_stream_set_param(voice_.session[i].pal_voice_handle,
@@ -243,7 +243,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             params->payload_size = sizeof(slow_talk);
             params->payload[0] = slow_talk;
 
-            for ( i = 0; i < max_voice_sessions_; i++) {
+            for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
                 voice_.session[i].slow_talk = slow_talk;
                 if (IsCallActive(&voice_.session[i])) {
                     pal_stream_set_param(voice_.session[i].pal_voice_handle,
@@ -274,7 +274,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             params->payload_size = sizeof(hd_voice);
             params->payload[0] = hd_voice;
 
-            for ( i = 0; i < max_voice_sessions_; i++) {
+            for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
                 voice_.session[i].hd_voice = hd_voice;
                 if (IsCallActive(&voice_.session[i])) {
                     pal_stream_set_param(voice_.session[i].pal_voice_handle,
@@ -317,7 +317,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
         } else {
             params->payload_size = sizeof(pal_device_mute_t);
 
-            for ( i = 0; i < max_voice_sessions_; i++) {
+            for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
                 voice_.session[i].device_mute.mute = mute;
                 voice_.session[i].device_mute.dir = dir;
                 memcpy(params->payload, &(voice_.session[i].device_mute), params->payload_size);
@@ -338,7 +338,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
         hac = false;
         if (strcmp(c_value, AUDIO_PARAMETER_VALUE_HAC_ON) == 0)
             hac = true;
-        for ( i = 0; i < max_voice_sessions_; i++) {
+        for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
             if (voice_.session[i].hac != hac) {
                 voice_.session[i].hac = hac;
                 if (IsCallActive(&voice_.session[i])) {
@@ -363,7 +363,7 @@ void AudioVoice::VoiceGetParameters(struct str_parms *query, struct str_parms *r
     ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_TTY_MODE,
                             value, sizeof(value));
     if (ret >= 0) {
-        for (int voiceSession_ind = 0; voiceSession_ind < max_voice_sessions_; voiceSession_ind++) {
+        for (int voiceSession_ind = 0; voiceSession_ind < MAX_VOICE_SESSIONS; voiceSession_ind++) {
             tty_mode = voice_.session[voiceSession_ind].tty_mode;
         }
         if (tty_mode >= PAL_TTY_OFF || tty_mode <= PAL_TTY_FULL) {
@@ -532,7 +532,7 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
         }
     } else {
         // do device switch here
-        for (int i = 0; i < max_voice_sessions_; i++) {
+        for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
             /* already in call, and now if BLE is connected send metadata
              * so that BLE can be configured for call and then switch to
              * BLE device
@@ -583,7 +583,7 @@ exit:
 bool AudioVoice::get_voice_call_state(audio_mode_t *mode) {
     int i, ret = 0;
     *mode = mode_;
-    for (i = 0; i < max_voice_sessions_; i++) {
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         if (voice_.session[i].state.current_ == CALL_ACTIVE) {
             return true;
         }
@@ -597,7 +597,7 @@ int AudioVoice::UpdateCallState(uint32_t vsid, int call_state) {
     bool is_call_active;
 
 
-    for (i = 0; i < max_voice_sessions_; i++) {
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         if (vsid == voice_.session[i].vsid) {
             session = &voice_.session[i];
             break;
@@ -633,7 +633,7 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
     int retry_cnt = 20;
     const int retry_period_ms = 100;
 
-    for (i = 0; i < max_voice_sessions_; i++) {
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         session = &pSession[i];
         AHAL_DBG("cur_state=%d new_state=%d vsid=%x",
                  session->state.current_, session->state.new_, session->vsid);
@@ -736,7 +736,7 @@ int AudioVoice::StopCall() {
 
     AHAL_DBG("Enter");
     voice_.in_call = false;
-    for (i = 0; i < max_voice_sessions_; i++)
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++)
         voice_.session[i].state.new_ = CALL_INACTIVE;
     ret = UpdateCalls(voice_.session);
     AHAL_DBG("Exit ret: %d", ret);
@@ -752,7 +752,7 @@ bool AudioVoice::IsAnyCallActive()
 {
     int i;
 
-    for (i = 0; i < max_voice_sessions_; i++) {
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         if (IsCallActive(&voice_.session[i]))
             return true;
     }
@@ -1366,7 +1366,7 @@ int AudioVoice::SetMicMute(bool mute) {
 
     AHAL_DBG("Enter mute: %d", mute);
     if (session) {
-        for (int i = 0; i < max_voice_sessions_; i++) {
+        for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
             if (session[i].pal_voice_handle) {
                 ret = pal_stream_set_mute(session[i].pal_voice_handle, mute);
                 if (ret)
@@ -1386,7 +1386,7 @@ int AudioVoice::SetVoiceVolume(float volume) {
     AHAL_DBG("Enter vol: %f", volume);
     if (session) {
 
-        for (int i = 0; i < max_voice_sessions_; i++) {
+        for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
             /* APM volume is cached when voice call is not active
              * cached volume is applied in voicestart before pal_stream_start
              */
@@ -1469,7 +1469,6 @@ void AudioVoice::updateVoiceMetadataForBT(bool call_active)
 AudioVoice::AudioVoice() {
 
     voice_.in_call = false;
-    max_voice_sessions_ = MAX_VOICE_SESSIONS;
     pal_vol_ = NULL;
     pal_vol_ = (struct pal_volume_data*)malloc(sizeof(uint32_t)
         + sizeof(struct pal_channel_vol_kv));
@@ -1481,7 +1480,7 @@ AudioVoice::AudioVoice() {
         AHAL_ERR("volume malloc failed %s", strerror(errno));
     }
 
-    for (int i = 0; i < max_voice_sessions_; i++) {
+    for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
         voice_.session[i].state.current_ = CALL_INACTIVE;
         voice_.session[i].state.new_ = CALL_INACTIVE;
         voice_.session[i].vsid = VOICEMMODE1_VSID;
@@ -1510,7 +1509,7 @@ AudioVoice::~AudioVoice() {
     if (pal_vol_)
         free(pal_vol_);
 
-    for (int i = 0; i < max_voice_sessions_; i++) {
+    for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
         voice_.session[i].state.current_ = CALL_INACTIVE;
         voice_.session[i].state.new_ = CALL_INACTIVE;
         voice_.session[i].vsid = VOICEMMODE1_VSID;
@@ -1527,6 +1526,5 @@ AudioVoice::~AudioVoice() {
     voice_.session[MMODE2_SESS_IDX].vsid = VOICEMMODE2_VSID;
 
     stream_out_primary_ = NULL;
-    max_voice_sessions_ = 0;
 }
 
