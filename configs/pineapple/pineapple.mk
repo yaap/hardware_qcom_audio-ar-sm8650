@@ -390,7 +390,8 @@ vendor.qc2audio.per_frame.flac.dec.enabled=true
 # compress capture feature related
 PRODUCT_PROPERTY_OVERRIDES += \
 vendor.audio.compress_capture.enabled=true \
-vendor.audio.compress_capture.aac=true
+vendor.audio.compress_capture.aac=true \
+vendor.audio.compress_capture.aac.cut_off_freq=-1
 # compress capture end
 
 ifneq ($(GENERIC_ODM_IMAGE),true)
