@@ -469,17 +469,10 @@ int AudioDevice::CreateAudioPatch(audio_patch_handle_t *handle,
                     //CRS Usecase
                     if (voice_)
                         voice_->get_voice_call_state(&mode);
-                    if(voice_ && voice_->voice_.crsVsid != 0 && mode != AUDIO_MODE_IN_CALL) {
-                        AHAL_DBG("Create Audio Patch CRS entry point");
-                        voice_->voice_.crsCall = true;
-                        device_types.clear();
-                        device_types.insert(sinks[0].ext.device.type);
-                        patch_type = AudioPatch::PATCH_DEVICE_CRS;
-                    } else {
-                        device_types.clear();
-                        device_types.insert(sinks[0].ext.device.type);
-                        patch_type = AudioPatch::PATCH_END_CRS;
-                    }
+                    AHAL_DBG("Create Audio Patch CRS entry point");
+                    device_types.clear();
+                    device_types.insert(sinks[0].ext.device.type);
+                    patch_type = AudioPatch::PATCH_DEVICE_LOOPBACK;
                     goto create_patch;
                 } else {
                     /*Device to device patch is not implemented.
@@ -538,7 +531,7 @@ create_patch:
         patch->sinks = sinks;
     }
 
-    if (voice_ && (patch_type == AudioPatch::PATCH_PLAYBACK || voice_->voice_.crsCall || patch_type == AudioPatch::PATCH_END_CRS))
+    if (voice_ && (patch_type == AudioPatch::PATCH_PLAYBACK || patch_type == AudioPatch::PATCH_DEVICE_LOOPBACK))
         ret = voice_->RouteStream(device_types);
     if (stream)
         ret |= stream->RouteStream(device_types);
@@ -590,7 +583,7 @@ int AudioDevice::ReleaseAudioPatch(audio_patch_handle_t handle) {
         case AUDIO_PORT_TYPE_DEVICE:
             if (patch->type == AudioPatch::PATCH_CAPTURE)
                 io_handle = patch->sinks[0].ext.mix.handle;
-            else if (patch->type == AudioPatch::PATCH_DEVICE_CRS) {
+            else if (patch->type == AudioPatch::PATCH_DEVICE_LOOPBACK) {
                 ret = voice_->UpdateCalls(voice_->voice_.session);
                 patch_map_mutex.unlock();
                 goto exit;
