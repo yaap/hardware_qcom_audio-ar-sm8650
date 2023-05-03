@@ -1203,7 +1203,14 @@ bool CompressAAC::configure(pal_stream_handle_t *palHandle) {
             kAacDefaultBitrate;
     }
 
-    if(mCutoffFrequency != -1){
+    if (supportsCutOffFrequency() && mCutoffFrequency == -1) {
+        const int32_t defaultValue = -1;
+        const std::string kPropName{
+            "vendor.audio.compress_capture.aac.cut_off_freq"};
+        mCutoffFrequency = property_get_int32(kPropName.c_str(), defaultValue);
+    }
+
+    if(mCutoffFrequency >= 0){
         mPalSndEnc.aac_enc.global_cutoff_freq = mCutoffFrequency;
         AHAL_DBG("compress aac global cutoff frequency requested: %d",
                  mPalSndEnc.aac_enc.global_cutoff_freq);
