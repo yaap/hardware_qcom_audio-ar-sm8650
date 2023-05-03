@@ -73,16 +73,18 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
 }
 
 void AudioVoice::MapCrsVolume(int CrsVolumeIndex) {
-     if (CrsVolumeIndex >= 7)
-        voice_.crsVol = 1.0;
-     else if (CrsVolumeIndex == 6)
-       voice_.crsVol = 0.8;
-     else if (CrsVolumeIndex == 5)
-        voice_.crsVol = 0.6;
+     if (CrsVolumeIndex == 1 ||
+         CrsVolumeIndex == 2 ||
+         CrsVolumeIndex == 3)
+        voice_.crsVol = 0.2;
      else if (CrsVolumeIndex == 4)
        voice_.crsVol = 0.4;
-     else if (CrsVolumeIndex == 3)
-       voice_.crsVol = 0.2;
+     else if (CrsVolumeIndex == 5)
+        voice_.crsVol = 0.6;
+     else if (CrsVolumeIndex == 6)
+       voice_.crsVol = 0.8;
+     else if (CrsVolumeIndex >= 7)
+       voice_.crsVol = 1.0;
      else
        voice_.crsVol = 0.0;
      AHAL_DBG("Crs volume is: %f", voice_.crsVol);
