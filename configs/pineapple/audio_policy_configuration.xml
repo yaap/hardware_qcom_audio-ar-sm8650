@@ -54,7 +54,7 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
     -->
     <modules>
         <!-- Primary Audio HAL -->
-        <module name="primary" halVersion="3.2">
+        <module name="primary" halVersion="2.0">
             <attachedDevices>
                 <item>Earpiece</item>
                 <item>Speaker</item>
