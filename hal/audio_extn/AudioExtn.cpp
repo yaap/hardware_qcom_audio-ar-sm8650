@@ -577,12 +577,15 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
         if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
         } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = false;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
@@ -602,12 +605,15 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
         if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_capture_suspended = true;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
         } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_capture_suspended = false;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void *)&param_bt_a2dp,
@@ -617,12 +623,15 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
         if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
         } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = false;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
