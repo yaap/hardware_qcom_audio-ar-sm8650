@@ -26,38 +26,10 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Changes from Qualcomm Innovation Center are provided under the following license:
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted (subject to the limitations in the
- * disclaimer below) provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *
- *     * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
- * GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
- * HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- * IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
- * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
+
 #define LOG_TAG "AHAL: soundtrigger"
 /* #define LOG_NDEBUG 0 */
 #define LOG_NDDEBUG 0
@@ -68,13 +40,13 @@
 #include <dlfcn.h>
 #include <pthread.h>
 #include <unistd.h>
-
-#include "AudioCommon.h"
 #include <cutils/list.h>
 
+#include "AudioCommon.h"
 #include "AudioDevice.h"
 #include "audio_extn.h"
 #include "AudioExtn.h"
+#include "PalApi.h"
 
 /*-------------------- Begin: AHAL-STHAL Interface ---------------------------*/
 /*
@@ -199,6 +171,12 @@ do {\
 #define SVA_PARAM_CHANNEL_INDEX "st_channel_index"
 #define MAX_STR_LENGTH_FFV_PARAMS 30
 #define MAX_FFV_SESSION_ID 100
+
+#define VUI_PARAMETER_SET_META_DATA "vui_set_metadata"
+#define VUI_PARAMETER_GET_META_DATA "vui_get_metadata"
+#define VUI_PARAMETER_CAPTURE_META_DATA "vui_cap_metadata"
+
+pal_stream_handle_t *pal_vui_handle = nullptr;
 
 /*
  * Current proprietary API version used by AHAL. Queried by STHAL
@@ -359,6 +337,18 @@ void* audio_extn_sound_trigger_check_and_get_session(StreamInPrimary *in_stream)
             break;
         }
     }
+    if (!in_stream->is_st_session) {
+        // Since the API is called twice, manage restoring vui handle.
+        if (pal_vui_handle) {
+            handle = (void *)pal_vui_handle;
+            in_stream->pal_vui_handle_ = pal_vui_handle;
+            pal_vui_handle = nullptr;
+            in_stream->is_st_session = true;
+        } else if (in_stream->pal_vui_handle_) {
+            handle = (void *)in_stream->pal_vui_handle_;
+            in_stream->is_st_session = true;
+        }
+    }
     pthread_mutex_unlock(&st_dev->lock);
 
 exit:
@@ -393,10 +383,65 @@ bool audio_extn_sound_trigger_check_session_activity(StreamInPrimary *in_stream)
     }
     pthread_mutex_unlock(&st_dev->lock);
 
+    if (in_stream->pal_vui_handle_) {
+        st_session_available = true;
+    }
+
 exit:
     AHAL_VERBOSE("Exit");
 
     return st_session_available;
+}
+
+void audio_extn_sound_trigger_set_parameters(std::shared_ptr<AudioDevice> adev __unused,
+    struct str_parms *params)
+{
+    int status = 0;
+    char value[1024] = {0};
+    size_t payload_sz = 0;
+    pal_stream_handle_t *handle = nullptr;
+
+    if (!params) {
+        AHAL_ERR("null params");
+        return;
+    }
+
+    status = str_parms_get_str(params, VUI_PARAMETER_SET_META_DATA, value, sizeof(value));
+    if (status >= 0) {
+        pal_set_param(PAL_PARAM_ID_VUI_SET_META_DATA, (void *)value, sizeof(value));
+    }
+
+    status = str_parms_get_str(params, VUI_PARAMETER_CAPTURE_META_DATA , value, sizeof(value));
+    if (status >= 0) {
+        pal_vui_handle = nullptr;
+        payload_sz = sizeof(value);
+        status = pal_get_param(PAL_PARAM_ID_VUI_CAPTURE_META_DATA, (void **)&value, &payload_sz, nullptr);
+        if (!status) {
+            pal_vui_handle = (pal_stream_handle_t *)*((uint64_t *)value);
+        }
+    }
+}
+
+void audio_extn_sound_trigger_get_parameters(std::shared_ptr<AudioDevice> adev __unused,
+    struct str_parms *query, struct str_parms *reply)
+{
+    int status = 0;
+    char value[1024] = {0};
+    size_t payload_sz = 0;
+
+    if (!query || !reply) {
+        AHAL_ERR("null query/reply");
+        return;
+    }
+
+    status = str_parms_get_str(query, VUI_PARAMETER_GET_META_DATA, value, sizeof(value));
+    if (status >= 0) {
+        payload_sz = sizeof(value);
+        status = pal_get_param(PAL_PARAM_ID_VUI_GET_META_DATA, (void **)&value, &payload_sz, nullptr);
+        if (!status) {
+            str_parms_add_str(reply, VUI_PARAMETER_GET_META_DATA, value);
+        }
+    }
 }
 
 int audio_extn_sound_trigger_init(std::shared_ptr<AudioDevice> adev)

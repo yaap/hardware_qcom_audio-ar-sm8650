@@ -1474,6 +1474,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         return ret;
     }
     AudioExtn::audio_extn_set_parameters(adev_, parms);
+    audio_extn_sound_trigger_set_parameters(adev_, parms);
 
     if ( (property_get_bool("vendor.audio.hdr.record.enable", false)) ||
          (property_get_bool("vendor.audio.hdr.spf.record.enable", false))) {
@@ -2143,6 +2144,7 @@ char* AudioDevice::GetParameters(const char *keys) {
     }
 
     AudioExtn::audio_extn_get_parameters(adev_, query, reply);
+    audio_extn_sound_trigger_get_parameters(adev_, query, reply);
     if (voice_)
         voice_->VoiceGetParameters(query, reply);
 
