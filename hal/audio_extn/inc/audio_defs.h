@@ -25,6 +25,10 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef AUDIO_DEFS_H
@@ -76,6 +80,23 @@
 #define AUDIO_OFFLOAD_CODEC_APE_SEEK_TABLE_PRESENT "music_offload_seek_table_present"
 
 #define AUDIO_OFFLOAD_CODEC_VORBIS_BITSTREAM_FMT "music_offload_vorbis_bitstream_fmt"
+
+#define AUDIO_OFFLOAD_CODEC_OPUS_VERSION "music_offload_opus_version"
+#define AUDIO_OFFLOAD_CODEC_OPUS_NUM_CHANNELS "music_offload_opus_num_channels"
+#define AUDIO_OFFLOAD_CODEC_OPUS_PRE_SKIP "music_offload_opus_pre_skip"
+#define AUDIO_OFFLOAD_CODEC_OPUS_OUTPUT_GAIN "music_offload_opus_output_gain"
+#define AUDIO_OFFLOAD_CODEC_OPUS_MAPPING_FAMILY "music_offload_opus_mapping_family"
+#define AUDIO_OFFLOAD_CODEC_OPUS_STREAM_COUNT "music_offload_opus_stream_count"
+#define AUDIO_OFFLOAD_CODEC_OPUS_COUPLED_COUNT "music_offload_opus_coupled_count"
+#define AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP0 "music_offload_opus_channel_map0"
+#define AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP1 "music_offload_opus_channel_map1"
+#define AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP2 "music_offload_opus_channel_map2"
+#define AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP3 "music_offload_opus_channel_map3"
+#define AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP4 "music_offload_opus_channel_map4"
+#define AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP5 "music_offload_opus_channel_map5"
+#define AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP6 "music_offload_opus_channel_map6"
+#define AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP7 "music_offload_opus_channel_map7"
+
 
 /* Query handle fm parameter*/
 #define AUDIO_PARAMETER_KEY_HANDLE_FM "handle_fm"
