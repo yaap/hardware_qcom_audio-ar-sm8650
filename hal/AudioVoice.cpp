@@ -486,6 +486,7 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
         if(pos != crs_devices.end())
             crs_devices.erase(pos);
         GetMatchingTxDevices(crs_devices, tx_devices);
+        SetVoiceVolume(voice_.crsVol);
     } else
         GetMatchingTxDevices(rx_devices, tx_devices);
 
