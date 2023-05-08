@@ -61,6 +61,8 @@
 #define MAX_READ_RETRY_COUNT 25
 #define MAX_ACTIVE_MICROPHONES_TO_SUPPORT 10
 #define AFE_PROXY_RECORD_PERIOD_SIZE  768
+#define TS_TO_NS(ts) (((ts).tv_sec * 1000000000LL) + (ts).tv_nsec)
+#define RAMP_UP_DELAY 80 //80ms
 
 static bool karaoke = false;
 std::mutex StreamOutPrimary::sourceMetadata_mutex_;
@@ -2104,6 +2106,25 @@ int StreamOutPrimary::Pause() {
         goto exit;
     }
 
+    if (stream_flushed_ == false && is_direct()) {
+        long timestamp_first_write = TS_TO_NS(ts_first_write);
+        if (timestamp_first_write != 0) {
+            struct timespec ts_pause = {0, 0};
+            int timedelta = 0;
+            long timestamp_pause = 0;
+            clock_gettime(CLOCK_MONOTONIC, &ts_pause);
+            timestamp_pause = TS_TO_NS(ts_pause);
+
+            timedelta = (timestamp_pause - timestamp_first_write) / 1000000LL;
+            AHAL_DBG("timestamp_pause :%ld, timestamp_first_write: %ld, timedelta: %ld",
+                      timestamp_pause, timestamp_first_write, timedelta);
+            if (timedelta < RAMP_UP_DELAY) {
+                AHAL_DBG("pending pause for %d ms", RAMP_UP_DELAY - timedelta);
+                usleep((RAMP_UP_DELAY - timedelta) * 1000);
+            }
+            ts_first_write = {0, 0};
+        }
+    }
     if (pal_stream_handle_) {
         ret = pal_stream_pause(pal_stream_handle_);
     }
@@ -2156,6 +2177,7 @@ int StreamOutPrimary::Flush() {
         {
             ret = pal_stream_flush(pal_stream_handle_);
             if (!ret) {
+                stream_flushed_ = true;
                 ret = pal_stream_resume(pal_stream_handle_);
                 if (!ret)
                     stream_paused_ = false;
@@ -2475,6 +2497,15 @@ done:
     }
     stream_mutex_.unlock();
     AHAL_DBG("exit %d", ret);
+    return ret;
+}
+
+int StreamOutPrimary::is_direct() {
+    bool ret = false;
+    if (streamAttributes_.type == PAL_STREAM_PCM_OFFLOAD ||
+        streamAttributes_.type == PAL_STREAM_COMPRESSED) {
+        ret = true;
+    }
     return ret;
 }
 
@@ -3511,6 +3542,10 @@ ssize_t StreamOutPrimary::write(const void *buffer, size_t bytes)
         }
     }
     ATRACE_BEGIN("hal: pal_stream_write");
+    if (stream_flushed_) {
+        stream_flushed_ = false;
+        clock_gettime(CLOCK_MONOTONIC, &ts_first_write);
+    }
     if (halInputFormat != halOutputFormat && convertBuffer != NULL) {
         if (bytes > fragment_size_) {
             AHAL_ERR("Error written bytes %zu > %d (fragment_size)", bytes, fragment_size_);
