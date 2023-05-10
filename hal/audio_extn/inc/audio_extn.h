@@ -66,6 +66,10 @@ void* audio_extn_sound_trigger_check_and_get_session(
     StreamInPrimary *in_stream);
 bool audio_extn_sound_trigger_check_session_activity(
     StreamInPrimary *in_stream);
+void audio_extn_sound_trigger_set_parameters(std::shared_ptr<AudioDevice> adev,
+    struct str_parms *params);
+void audio_extn_sound_trigger_get_parameters(std::shared_ptr<AudioDevice> adev,
+    struct str_parms *query, struct str_parms *reply);
 
 extern "C" int audio_hw_get_gain_level_mapping(struct pal_amp_db_and_gain_table *mapping_tbl,
                                       int table_size);

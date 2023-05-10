@@ -642,6 +642,8 @@ public:
     std::vector<record_track_metadata_t> tracks;
     int SetAggregateSinkMetadata(bool voice_active);
     static std::mutex sinkMetadata_mutex_;
+    pal_stream_handle_t *pal_vui_handle_;
+
 protected:
     struct timespec readAt;
     uint32_t fragments_ = 0;
