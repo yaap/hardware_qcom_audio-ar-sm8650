@@ -148,9 +148,12 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
 
     err = str_parms_get_int(parms, AUDIO_PARAMETER_KEY_CRS_VOLUME, &value);
     if (err >= 0) {
-        if (value >= 0)
+        float crsVol = voice_.crsVol;
+        if (value >= 0) {
             MapCrsVolume(value);
-        else
+            if (voice_.crsCall && crsVol != voice_.crsVol)
+                SetVoiceVolume(voice_.crsVol);
+        } else
             AHAL_ERR("Invalid CRS Volume");
     }
 
