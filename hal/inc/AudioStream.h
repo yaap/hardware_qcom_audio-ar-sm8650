@@ -494,6 +494,7 @@ protected:
     char                      address_[AUDIO_DEVICE_MAX_ADDRESS_LEN];
     bool                      stream_started_ = false;
     bool                      stream_paused_ = false;
+    bool                      stream_flushed_ = false;
     int usecase_;
     struct pal_volume_data *volume_; /* used to cache volume */
     std::map <audio_devices_t, pal_device_id_t> mAndroidDeviceMap;
@@ -566,6 +567,7 @@ protected:
     struct timespec writeAt;
     int get_compressed_buffer_size();
     int get_pcm_buffer_size();
+    int is_direct();
     audio_format_t halInputFormat = AUDIO_FORMAT_DEFAULT;
     audio_format_t halOutputFormat = AUDIO_FORMAT_DEFAULT;
     uint32_t convertBufSize;
@@ -593,6 +595,7 @@ protected:
 
     int FillHalFnPtrs();
     friend class AudioDevice;
+    struct timespec ts_first_write = {0, 0};
 };
 
 class StreamInPrimary : public StreamPrimary{
