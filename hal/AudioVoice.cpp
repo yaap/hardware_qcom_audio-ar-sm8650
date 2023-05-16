@@ -1415,6 +1415,9 @@ int AudioVoice::SetVoiceVolume(float volume) {
     int ret = 0;
     voice_session_t *session = voice_.session;
 
+    if (voice_.crsCall)
+        volume = voice_.crsVol;
+
     AHAL_DBG("Enter vol: %f", volume);
     if (session) {
 
