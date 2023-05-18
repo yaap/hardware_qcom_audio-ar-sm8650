@@ -321,7 +321,8 @@ const std::map<uint32_t, pal_audio_fmt_t> getFormatId {
     {AUDIO_FORMAT_APE,                 PAL_AUDIO_FMT_APE},
     {AUDIO_FORMAT_WMA_PRO,             PAL_AUDIO_FMT_WMA_PRO},
     {AUDIO_FORMAT_FLAC,                PAL_AUDIO_FMT_FLAC},
-    {AUDIO_FORMAT_VORBIS,              PAL_AUDIO_FMT_VORBIS}
+    {AUDIO_FORMAT_VORBIS,              PAL_AUDIO_FMT_VORBIS},
+    {AUDIO_FORMAT_OPUS,                PAL_AUDIO_FMT_OPUS}
 };
 
 const uint32_t format_to_bitwidth_table[] = {
@@ -641,6 +642,8 @@ public:
     std::vector<record_track_metadata_t> tracks;
     int SetAggregateSinkMetadata(bool voice_active);
     static std::mutex sinkMetadata_mutex_;
+    pal_stream_handle_t *pal_vui_handle_;
+
 protected:
     struct timespec readAt;
     uint32_t fragments_ = 0;

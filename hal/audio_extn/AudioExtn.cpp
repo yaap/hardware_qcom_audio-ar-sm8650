@@ -332,7 +332,103 @@ int AudioExtn::audio_extn_parse_compress_metadata(struct audio_config *config_, 
                 pal_snd_dec->wma_dec.encodeopt1,
                 pal_snd_dec->wma_dec.encodeopt2);
     }
+    else if (config_->offload_info.format == AUDIO_FORMAT_OPUS) {
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_VERSION, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.version = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_NUM_CHANNELS, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.num_channels = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_PRE_SKIP, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.pre_skip = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_OUTPUT_GAIN, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.output_gain = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_MAPPING_FAMILY, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.mapping_family = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_STREAM_COUNT, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.stream_count = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_COUPLED_COUNT, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.coupled_count = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP0, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.channel_map[0] = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP1, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.channel_map[1] = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP2, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.channel_map[2] = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP3, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.channel_map[3] = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP4, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.channel_map[4] = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP5, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.channel_map[5] = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP6, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.channel_map[6] = atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_CHANNEL_MAP7, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.channel_map[7] = atoi(value);
+        }
+        if (config_->offload_info.sample_rate) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.sample_rate = config_->offload_info.sample_rate;
+        }
 
+        AHAL_DBG("OPUS params: version %d, num_channels %d, pre_skip %d,"
+                " sample_rate %d, output_gain %d, mapping_family %d,"
+                " stream_count %d, coupled_count %d",
+                pal_snd_dec->opus_dec.version,
+                pal_snd_dec->opus_dec.num_channels,
+                pal_snd_dec->opus_dec.pre_skip,
+                pal_snd_dec->opus_dec.sample_rate,
+                pal_snd_dec->opus_dec.output_gain,
+                pal_snd_dec->opus_dec.mapping_family,
+                pal_snd_dec->opus_dec.stream_count,
+                pal_snd_dec->opus_dec.coupled_count);
+        AHAL_DBG("channel map:");
+        for (int i = 0; i < pal_snd_dec->opus_dec.num_channels; i++) {
+            AHAL_DBG("%d", pal_snd_dec->opus_dec.channel_map[i]);
+        }
+    }
     else if ((config_->offload_info.format & AUDIO_FORMAT_MAIN_MASK) == AUDIO_FORMAT_AAC ||
              (config_->offload_info.format & AUDIO_FORMAT_MAIN_MASK) == AUDIO_FORMAT_AAC_ADTS ||
              (config_->offload_info.format & AUDIO_FORMAT_MAIN_MASK) == AUDIO_FORMAT_AAC_ADIF ||
@@ -577,12 +673,15 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
         if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
         } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = false;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
@@ -602,12 +701,15 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
         if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_capture_suspended = true;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void *)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
         } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_capture_suspended = false;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void *)&param_bt_a2dp,
@@ -617,12 +719,15 @@ static int reconfig_cb (tSESSION_TYPE session_type, int state)
         if ((tRECONFIG_STATE)state == SESSION_SUSPEND) {
             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = true;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
                                 sizeof(pal_param_bta2dp_t));
         } else if ((tRECONFIG_STATE)state == SESSION_RESUME) {
+            std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
             param_bt_a2dp.a2dp_suspended = false;
+            param_bt_a2dp.is_suspend_setparam = false;
             param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
             ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
@@ -1203,7 +1308,14 @@ bool CompressAAC::configure(pal_stream_handle_t *palHandle) {
             kAacDefaultBitrate;
     }
 
-    if(mCutoffFrequency != -1){
+    if (supportsCutOffFrequency() && mCutoffFrequency == -1) {
+        const int32_t defaultValue = -1;
+        const std::string kPropName{
+            "vendor.audio.compress_capture.aac.cut_off_freq"};
+        mCutoffFrequency = property_get_int32(kPropName.c_str(), defaultValue);
+    }
+
+    if(mCutoffFrequency >= 0){
         mPalSndEnc.aac_enc.global_cutoff_freq = mCutoffFrequency;
         AHAL_DBG("compress aac global cutoff frequency requested: %d",
                  mPalSndEnc.aac_enc.global_cutoff_freq);

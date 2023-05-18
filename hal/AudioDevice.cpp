@@ -426,11 +426,15 @@ int AudioDevice::CreateAudioPatch(audio_patch_handle_t *handle,
     int ret = 0;
     bool new_patch = false;
     AudioPatch *patch = NULL;
+    audio_mode_t mode;
     std::shared_ptr<StreamPrimary> stream = nullptr;
     AudioPatch::PatchType patch_type = AudioPatch::PATCH_NONE;
     audio_io_handle_t io_handle = AUDIO_IO_HANDLE_NONE;
     audio_source_t input_source = AUDIO_SOURCE_DEFAULT;
     std::set<audio_devices_t> device_types;
+
+    AHAL_DBG("source: %d, sink: %d, source type: %d, sink type %d", sources[0].type, sinks[0].type,
+            sources[0].ext.device.type, sinks[0].ext.device.type);
 
     AHAL_DBG("enter: num sources %zu, num_sinks %zu", sources.size(), sinks.size());
 
@@ -460,13 +464,32 @@ int AudioDevice::CreateAudioPatch(audio_patch_handle_t *handle,
                 AHAL_DBG("Capture patch from device %x to mix %d",
                           sources[0].ext.device.type, sinks[0].ext.mix.handle);
             } else {
-                /*Device to device patch is not implemented.
-                  This space will need changes if audio HAL
-                  handles device to device patches in the future.*/
-                patch_type = AudioPatch::PATCH_DEVICE_LOOPBACK;
-                AHAL_ERR("error device to device patches not supported");
-                ret = -ENOSYS;
-                goto exit;
+                //source should be Telephony_RX inserted above, sink should be primary RX device
+                if (sources[0].ext.device.type == AUDIO_DEVICE_IN_TELEPHONY_RX) {
+                    //CRS Usecase
+                    if (voice_)
+                        voice_->get_voice_call_state(&mode);
+                    if(voice_ && voice_->voice_.crsVsid != 0 && mode != AUDIO_MODE_IN_CALL) {
+                        AHAL_DBG("Create Audio Patch CRS entry point");
+                        voice_->voice_.crsCall = true;
+                        device_types.clear();
+                        device_types.insert(sinks[0].ext.device.type);
+                        patch_type = AudioPatch::PATCH_DEVICE_CRS;
+                    } else {
+                        device_types.clear();
+                        device_types.insert(sinks[0].ext.device.type);
+                        patch_type = AudioPatch::PATCH_END_CRS;
+                    }
+                    goto create_patch;
+                } else {
+                    /*Device to device patch is not implemented.
+                    This space will need changes if audio HAL
+                    handles device to device patches in the future.*/
+                    patch_type = AudioPatch::PATCH_DEVICE_LOOPBACK;
+                    AHAL_ERR("error device to device patches not supported");
+                    ret = -ENOSYS;
+                    goto exit;
+                }
             }
             break;
         case AUDIO_PORT_TYPE_MIX: // Patch for audio playback
@@ -495,6 +518,7 @@ int AudioDevice::CreateAudioPatch(audio_patch_handle_t *handle,
         goto exit;
     }
 
+create_patch:
     // empty patch...generate new handle
     if (*handle == AUDIO_PATCH_HANDLE_NONE) {
         patch = new AudioPatch(patch_type, sources, sinks);
@@ -514,9 +538,10 @@ int AudioDevice::CreateAudioPatch(audio_patch_handle_t *handle,
         patch->sinks = sinks;
     }
 
-    if (voice_ && patch_type == AudioPatch::PATCH_PLAYBACK)
+    if (voice_ && (patch_type == AudioPatch::PATCH_PLAYBACK || voice_->voice_.crsCall || patch_type == AudioPatch::PATCH_END_CRS))
         ret = voice_->RouteStream(device_types);
-    ret |= stream->RouteStream(device_types);
+    if (stream)
+        ret |= stream->RouteStream(device_types);
 
     if (ret) {
         if (new_patch)
@@ -557,6 +582,7 @@ int AudioDevice::ReleaseAudioPatch(audio_patch_handle_t handle) {
     }
     patch = &(*patch_it->second);
     patch_type = patch->type;
+    AHAL_DBG("Audio Patch type: %d", patch->type);
     switch (patch->sources[0].type) {
         case AUDIO_PORT_TYPE_MIX:
             io_handle = patch->sources[0].ext.mix.handle;
@@ -564,6 +590,11 @@ int AudioDevice::ReleaseAudioPatch(audio_patch_handle_t handle) {
         case AUDIO_PORT_TYPE_DEVICE:
             if (patch->type == AudioPatch::PATCH_CAPTURE)
                 io_handle = patch->sinks[0].ext.mix.handle;
+            else if (patch->type == AudioPatch::PATCH_DEVICE_CRS) {
+                ret = voice_->UpdateCalls(voice_->voice_.session);
+                patch_map_mutex.unlock();
+                goto exit;
+            }
             break;
         case AUDIO_PORT_TYPE_SESSION:
         case AUDIO_PORT_TYPE_NONE:
@@ -588,11 +619,14 @@ int AudioDevice::ReleaseAudioPatch(audio_patch_handle_t handle) {
     if (ret)
         AHAL_ERR("Stream routing failed for io_handle %d", io_handle);
 
+exit:
+    AHAL_DBG("Exiting ReleaseAudioPatch");
     std::lock_guard lock(patch_map_mutex);
     patch_map_.erase(handle);
     delete patch;
 
     AHAL_DBG("Successfully released patch %d", handle);
+    AHAL_DBG("Exit ret: %d", ret);
     return ret;
 }
 
@@ -1440,6 +1474,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         return ret;
     }
     AudioExtn::audio_extn_set_parameters(adev_, parms);
+    audio_extn_sound_trigger_set_parameters(adev_, parms);
 
     if ( (property_get_bool("vendor.audio.hdr.record.enable", false)) ||
          (property_get_bool("vendor.audio.hdr.spf.record.enable", false))) {
@@ -1732,17 +1767,18 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         audio_devices_t device = (audio_devices_t)val;
         if (audio_is_usb_out_device(device) || audio_is_usb_in_device(device)) {
             ret = str_parms_get_str(parms, "card", value, sizeof(value));
-            if (ret >= 0)
+            if (ret >= 0) {
                 param_device_connection.device_config.usb_addr.card_id = atoi(value);
+                if ((usb_card_id_ == param_device_connection.device_config.usb_addr.card_id) &&
+                    (audio_is_usb_in_device(device)) && (usb_input_dev_enabled == true)) {
+                     usb_input_dev_enabled = false;
+                     usb_out_headset = false;
+                     AHAL_DBG("usb_input_dev_enabled flag is cleared.");
+                }
+            }
             ret = str_parms_get_str(parms, "device", value, sizeof(value));
             if (ret >= 0)
                 param_device_connection.device_config.usb_addr.device_num = atoi(value);
-            if ((usb_card_id_ == param_device_connection.device_config.usb_addr.card_id) &&
-                (audio_is_usb_in_device(device)) && (usb_input_dev_enabled == true)) {
-                   usb_input_dev_enabled = false;
-                   usb_out_headset = false;
-                   AHAL_DBG("usb_input_dev_enabled flag is cleared.");
-            }
         } else if (val == AUDIO_DEVICE_OUT_AUX_DIGITAL) {
             int controller = -1, stream = -1;
             AudioExtn::get_controller_stream_from_params(parms, &controller, &stream);
@@ -1795,6 +1831,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
     ret = str_parms_get_str(parms, "A2dpSuspended" , value, sizeof(value));
     if (ret >= 0) {
         pal_param_bta2dp_t param_bt_a2dp;
+        param_bt_a2dp.is_suspend_setparam = true;
 
         if (strncmp(value, "true", 4) == 0)
             param_bt_a2dp.a2dp_suspended = true;
@@ -1804,6 +1841,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
 
         AHAL_INFO("BT A2DP Suspended = %s, command received", value);
+        std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
         ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void *)&param_bt_a2dp,
                             sizeof(pal_param_bta2dp_t));
     }
@@ -2005,6 +2043,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
     ret = str_parms_get_str(parms, "A2dpCaptureSuspend", value, sizeof(value));
     if (ret >= 0) {
         pal_param_bta2dp_t param_bt_a2dp;
+        param_bt_a2dp.is_suspend_setparam = true;
 
         if (strncmp(value, "true", 4) == 0)
             param_bt_a2dp.a2dp_capture_suspended = true;
@@ -2014,6 +2053,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_A2DP;
 
         AHAL_INFO("BT A2DP Capture Suspended = %s, command received", value);
+        std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
         ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void*)&param_bt_a2dp,
             sizeof(pal_param_bta2dp_t));
     }
@@ -2026,6 +2066,34 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             adev_->icmd_playback  = false;
     }
 
+    ret = str_parms_get_str(parms, "LEASuspended", value, sizeof(value));
+    if (ret >= 0) {
+        pal_param_bta2dp_t param_bt_a2dp;
+        param_bt_a2dp.is_suspend_setparam = true;
+
+        if (strcmp(value, "true") == 0) {
+            param_bt_a2dp.a2dp_suspended = true;
+            param_bt_a2dp.a2dp_capture_suspended = true;
+        } else {
+            param_bt_a2dp.a2dp_suspended = false;
+            param_bt_a2dp.a2dp_capture_suspended = false;
+        }
+
+        AHAL_INFO("BT LEA Suspended = %s, command received", value);
+        //Synchronize the suspend/resume calls from setparams and reconfig_cb
+        std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
+        param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
+        ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
+            sizeof(pal_param_bta2dp_t));
+
+        param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
+        ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED, (void*)&param_bt_a2dp,
+            sizeof(pal_param_bta2dp_t));
+
+        param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
+        ret = pal_set_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED, (void*)&param_bt_a2dp,
+            sizeof(pal_param_bta2dp_t));
+    }
 
 exit:
     if (parms)
@@ -2108,6 +2176,7 @@ char* AudioDevice::GetParameters(const char *keys) {
     }
 
     AudioExtn::audio_extn_get_parameters(adev_, query, reply);
+    audio_extn_sound_trigger_get_parameters(adev_, query, reply);
     if (voice_)
         voice_->VoiceGetParameters(query, reply);
 
@@ -2269,6 +2338,7 @@ static int adev_open(const hw_module_t *module, const char *name __unused,
 
     if (!adevice) {
         AHAL_ERR("error, GetInstance failed");
+        goto exit;
     }
 
     adevice->adev_init_mutex.lock();

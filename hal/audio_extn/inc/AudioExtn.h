@@ -170,16 +170,16 @@ class CompressAAC {
 
     explicit CompressAAC(audio_format_t format, uint32_t sampleRate,
                          uint32_t channelCount)
-        : mFormat(format),
+        : mCompressReadCalls(0),
+          mCompressStreamAdjBitRate(-1),
+          mCutoffFrequency(-1),
+          mIsConfigured(false),
           mSampleRate(sampleRate),
           mChannelCount(channelCount),
-          mIsConfigured(false),
           mPCMSamplesPerFrame(format == AUDIO_FORMAT_AAC_LC
                                   ? kAacLcPCMSamplesPerFrame
                                   : kHeAacPCMSamplesPerFrame),
-          mCompressStreamAdjBitRate(-1),
-          mCutoffFrequency(-1),
-          mCompressReadCalls(0) {}
+          mFormat(format) {}
 
     ~CompressAAC() = default;
 

@@ -125,6 +125,7 @@ PRODUCT_PACKAGES += fai__2.9.0_1.0__3.0.0_0.0__3.1.1_0.0__3.2.0_0.1__eai_3.4_enp
 PRODUCT_PACKAGES += fai__2.9.2_0.0__3.0.0_0.0__3.1.1_0.0__3.2.0_0.1__eai_3.4_enpuv4.pmd
 PRODUCT_PACKAGES += fai__4.8.4_0.0__3.0.0_0.0__3.1.1_0.0__3.2.0_0.1__eai_3.4_enpuv4.pmd
 PRODUCT_PACKAGES += fai__8.0.2_0.0__3.0.0_0.0__3.1.1_0.0__3.2.0_0.1__eai_3.4_enpuv4.pmd
+PRODUCT_PACKAGES += fai__2.9.2_1.0__3.0.0_0.0__3.1.1_0.0__3.2.0_0.0__eai_3.4_enpuv4.pmd
 PRODUCT_PACKAGES += fai__3.0.0_0.0__eai_3.4_enpuv4.pmd
 
 # Audio configuration xml's related to Lanai
@@ -188,6 +189,9 @@ ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
 PRODUCT_COPY_FILES += \
     $(TOPDIR)vendor/qcom/opensource/audio-hal/primary-hal/configs/common/init.qti.audio.debug.sh:$(TARGET_COPY_OUT_VENDOR)/bin/init.qti.audio.debug.sh
 endif
+
+# XML config file for memory logger
+PRODUCT_COPY_FILES += $(TOPDIR)vendor/qcom/opensource/audio-hal/primary-hal/configs/$(DEVICE_SKU)/mem_logger_config.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mem_logger_config.xml
 
 # Reduce client buffer size for fast audio output tracks
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -390,7 +394,8 @@ vendor.qc2audio.per_frame.flac.dec.enabled=true
 # compress capture feature related
 PRODUCT_PROPERTY_OVERRIDES += \
 vendor.audio.compress_capture.enabled=true \
-vendor.audio.compress_capture.aac=true
+vendor.audio.compress_capture.aac=true \
+vendor.audio.compress_capture.aac.cut_off_freq=-1
 # compress capture end
 
 ifneq ($(GENERIC_ODM_IMAGE),true)

@@ -72,6 +72,24 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
     return ret;
 }
 
+void AudioVoice::MapCrsVolume(int CrsVolumeIndex) {
+     if (CrsVolumeIndex == 1 ||
+         CrsVolumeIndex == 2 ||
+         CrsVolumeIndex == 3)
+        voice_.crsVol = 0.2;
+     else if (CrsVolumeIndex == 4)
+       voice_.crsVol = 0.4;
+     else if (CrsVolumeIndex == 5)
+        voice_.crsVol = 0.6;
+     else if (CrsVolumeIndex == 6)
+       voice_.crsVol = 0.8;
+     else if (CrsVolumeIndex >= 7)
+       voice_.crsVol = 1.0;
+     else
+       voice_.crsVol = 0.0;
+     AHAL_DBG("Crs volume is: %f", voice_.crsVol);
+}
+
 int AudioVoice::VoiceSetParameters(const char *kvpairs) {
     int value, i;
     char c_value[32];
@@ -92,6 +110,21 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
     err = str_parms_get_int(parms, AUDIO_PARAMETER_KEY_VSID, &value);
     if (err >= 0) {
         uint32_t vsid = value;
+
+        err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_CRS_ACTIVE, c_value, sizeof(c_value));
+        if (err >= 0) {
+            if (strcmp(c_value, "true") == 0) {
+                AHAL_DBG("CRS param and VSID verified");
+                voice_.crsVsid = vsid;
+            }
+            else {
+                if (vsid == voice_.crsVsid) {
+                    AHAL_DBG("CRS call = false");
+                    voice_.crsVsid = 0;
+                }
+            }
+        }
+
         int call_state = -1;
         err = str_parms_get_int(parms, AUDIO_PARAMETER_KEY_CALL_STATE, &value);
         if (err >= 0) {
@@ -103,7 +136,8 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
         }
 
         if (is_valid_vsid(vsid) && is_valid_call_state(call_state)) {
-            ret = UpdateCallState(vsid, call_state);
+            if (!voice_.crsCall)
+                ret = UpdateCallState(vsid, call_state);
         } else {
             AHAL_ERR("invalid vsid:%x or call_state:%d",
                      vsid, call_state);
@@ -111,6 +145,15 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             goto done;
         }
     }
+
+    err = str_parms_get_int(parms, AUDIO_PARAMETER_KEY_CRS_VOLUME, &value);
+    if (err >= 0) {
+        if (value >= 0)
+            MapCrsVolume(value);
+        else
+            AHAL_ERR("Invalid CRS Volume");
+    }
+
     err = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_TTY_MODE, c_value, sizeof(c_value));
     if (err >= 0) {
         if (strcmp(c_value, AUDIO_PARAMETER_VALUE_TTY_OFF) == 0)
@@ -126,7 +169,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             goto done;
         }
 
-        for ( i = 0; i < max_voice_sessions_; i++) {
+        for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
             voice_.session[i].tty_mode = tty_mode;
             if (IsCallActive(&voice_.session[i])) {
                 params = (pal_param_payload *)calloc(1,
@@ -170,7 +213,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             params->payload_size = sizeof(volume_boost);
             params->payload[0] = volume_boost;
 
-            for ( i = 0; i < max_voice_sessions_; i++) {
+            for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
                 voice_.session[i].volume_boost = volume_boost;
                 if (IsCallActive(&voice_.session[i])) {
                     pal_stream_set_param(voice_.session[i].pal_voice_handle,
@@ -202,7 +245,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             params->payload_size = sizeof(slow_talk);
             params->payload[0] = slow_talk;
 
-            for ( i = 0; i < max_voice_sessions_; i++) {
+            for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
                 voice_.session[i].slow_talk = slow_talk;
                 if (IsCallActive(&voice_.session[i])) {
                     pal_stream_set_param(voice_.session[i].pal_voice_handle,
@@ -233,7 +276,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
             params->payload_size = sizeof(hd_voice);
             params->payload[0] = hd_voice;
 
-            for ( i = 0; i < max_voice_sessions_; i++) {
+            for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
                 voice_.session[i].hd_voice = hd_voice;
                 if (IsCallActive(&voice_.session[i])) {
                     pal_stream_set_param(voice_.session[i].pal_voice_handle,
@@ -276,7 +319,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
         } else {
             params->payload_size = sizeof(pal_device_mute_t);
 
-            for ( i = 0; i < max_voice_sessions_; i++) {
+            for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
                 voice_.session[i].device_mute.mute = mute;
                 voice_.session[i].device_mute.dir = dir;
                 memcpy(params->payload, &(voice_.session[i].device_mute), params->payload_size);
@@ -297,7 +340,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
         hac = false;
         if (strcmp(c_value, AUDIO_PARAMETER_VALUE_HAC_ON) == 0)
             hac = true;
-        for ( i = 0; i < max_voice_sessions_; i++) {
+        for ( i = 0; i < MAX_VOICE_SESSIONS; i++) {
             if (voice_.session[i].hac != hac) {
                 voice_.session[i].hac = hac;
                 if (IsCallActive(&voice_.session[i])) {
@@ -322,7 +365,7 @@ void AudioVoice::VoiceGetParameters(struct str_parms *query, struct str_parms *r
     ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_TTY_MODE,
                             value, sizeof(value));
     if (ret >= 0) {
-        for (int voiceSession_ind = 0; voiceSession_ind < max_voice_sessions_; voiceSession_ind++) {
+        for (int voiceSession_ind = 0; voiceSession_ind < MAX_VOICE_SESSIONS; voiceSession_ind++) {
             tty_mode = voice_.session[voiceSession_ind].tty_mode;
         }
         if (tty_mode >= PAL_TTY_OFF || tty_mode <= PAL_TTY_FULL) {
@@ -343,6 +386,10 @@ void AudioVoice::VoiceGetParameters(struct str_parms *query, struct str_parms *r
         } else {
             AHAL_ERR("Error happened for getting TTY mode");
         }
+    }
+    ret = str_parms_get_str(query, AUDIO_PARAMETER_KEY_CRS_CALL_SUPPORTED, value, sizeof(value));
+    if (ret >= 0) {
+        str_parms_add_int(reply, AUDIO_PARAMETER_KEY_CRS_CALL_SUPPORTED, 1);
     }
     return;
 }
@@ -423,6 +470,8 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
     bool a2dp_capture_suspended = false;
     int retry_cnt = 20;
     const int retry_period_ms = 100;
+    std::set<audio_devices_t> crs_devices;
+    bool is_suspend_setparam = false;
 
     AHAL_DBG("Enter");
 
@@ -431,7 +480,15 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
         goto exit;
     }
 
-    GetMatchingTxDevices(rx_devices, tx_devices);
+    if(voice_.crsCall && rx_devices.size() > 1) {
+        crs_devices = rx_devices;
+        std::set<audio_devices_t>::iterator pos = crs_devices.find(AUDIO_DEVICE_OUT_SPEAKER);
+        if(pos != crs_devices.end())
+            crs_devices.erase(pos);
+        GetMatchingTxDevices(crs_devices, tx_devices);
+        SetVoiceVolume(voice_.crsVol);
+    } else
+        GetMatchingTxDevices(rx_devices, tx_devices);
 
     /**
      * if device_none is in Tx/Rx devices,
@@ -456,7 +513,12 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
     AHAL_DBG("Routing is %d", AudioExtn::get_device_types(rx_devices));
 
     if (stream_out_primary_) {
-        stream_out_primary_->getPalDeviceIds(rx_devices, pal_device_ids);
+        if(voice_.crsCall && rx_devices.size() > 1)
+            stream_out_primary_->getPalDeviceIds(crs_devices, pal_device_ids);
+
+        else
+            stream_out_primary_->getPalDeviceIds(rx_devices, pal_device_ids);
+
         pal_rx_device = pal_device_ids[0];
         memset(pal_device_ids, 0, device_count * sizeof(pal_device_id_t));
         stream_out_primary_->getPalDeviceIds(tx_devices, pal_device_ids);
@@ -468,29 +530,40 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
 
     voice_mutex_.lock();
     if (!IsAnyCallActive()) {
-        if (mode_ == AUDIO_MODE_IN_CALL || mode_ == AUDIO_MODE_CALL_SCREEN) {
+        if (mode_ == AUDIO_MODE_IN_CALL || mode_ == AUDIO_MODE_CALL_SCREEN || voice_.crsCall) {
             voice_.in_call = true;
             ret = UpdateCalls(voice_.session);
         }
     } else {
         // do device switch here
-        for (int i = 0; i < max_voice_sessions_; i++) {
+        for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
             /* already in call, and now if BLE is connected send metadata
              * so that BLE can be configured for call and then switch to
              * BLE device
              */
             updateVoiceMetadataForBT(true);
 
+            /*In case of active LEA profile, if voice call accepted by an inactive legacy headset
+            * over SCO profile. APM is not aware about SCO active profile until BT_SCO=ON
+            * event triggers from BT. In meantime before BT_SCO=ON, when LEA is suspended via
+            * setparam call, APM tries to route voice call to BLE device.
+            * In RouteStream call, if suspended state for LEA is true it keep checks over a
+            * sleep of 2 secs. This causes timecheck issue in audioservice. Thus check for
+            * is_suspend_setparam flag to know whether BLE suspended due to the actual setparam
+            * or reconfig_cb(suspend->resume).
+            */
             if ((pal_voice_rx_device_id_ == PAL_DEVICE_OUT_BLUETOOTH_BLE) &&
                 (pal_voice_tx_device_id_ == PAL_DEVICE_IN_BLUETOOTH_BLE)) {
                 do {
                     std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
                     ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED,
                                         (void **)&param_bt_a2dp, &bt_param_size, nullptr);
-                    if (!ret && param_bt_a2dp)
+                    if (!ret && param_bt_a2dp) {
                         a2dp_suspended = param_bt_a2dp->a2dp_suspended;
-                    else
+                        is_suspend_setparam = param_bt_a2dp->is_suspend_setparam;
+                    } else {
                         AHAL_ERR("getparam for PAL_PARAM_ID_BT_A2DP_SUSPENDED failed");
+                    }
                     param_bt_a2dp = nullptr;
                     bt_param_size = 0;
                     ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED,
@@ -501,8 +574,8 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
                         AHAL_ERR("getparam for BT_A2DP_CAPTURE_SUSPENDED failed");
                     param_bt_a2dp = nullptr;
                     bt_param_size = 0;
-                } while ((a2dp_suspended || a2dp_capture_suspended) && retry_cnt-- &&
-                         !usleep(retry_period_ms * 1000));
+                } while (!is_suspend_setparam && (a2dp_suspended || a2dp_capture_suspended) &&
+                    retry_cnt-- && !usleep(retry_period_ms * 1000));
                 AHAL_INFO("a2dp_suspended status %d and a2dp_capture_suspended status %d",
                        a2dp_suspended, a2dp_capture_suspended);
             }
@@ -525,7 +598,7 @@ exit:
 bool AudioVoice::get_voice_call_state(audio_mode_t *mode) {
     int i, ret = 0;
     *mode = mode_;
-    for (i = 0; i < max_voice_sessions_; i++) {
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         if (voice_.session[i].state.current_ == CALL_ACTIVE) {
             return true;
         }
@@ -539,7 +612,7 @@ int AudioVoice::UpdateCallState(uint32_t vsid, int call_state) {
     bool is_call_active;
 
 
-    for (i = 0; i < max_voice_sessions_; i++) {
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         if (vsid == voice_.session[i].vsid) {
             session = &voice_.session[i];
             break;
@@ -574,11 +647,20 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
     bool a2dp_capture_suspended = false;
     int retry_cnt = 20;
     const int retry_period_ms = 100;
+    bool is_suspend_setparam = false;
 
-    for (i = 0; i < max_voice_sessions_; i++) {
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         session = &pSession[i];
         AHAL_DBG("cur_state=%d new_state=%d vsid=%x",
                  session->state.current_, session->state.new_, session->vsid);
+
+        if (voice_.crsCall && session->vsid == voice_.crsVsid) {
+            AHAL_DBG("CRS Update call state");
+            if (session->state.current_ == CALL_ACTIVE)
+                session->state.new_ = CALL_INACTIVE;
+            else
+                session->state.new_ = CALL_ACTIVE;
+        }
 
         switch(session->state.new_)
         {
@@ -596,10 +678,12 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
                             std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
                             ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_SUSPENDED,
                                                 (void **)&param_bt_a2dp, &bt_param_size, nullptr);
-                            if (!ret && param_bt_a2dp)
+                            if (!ret && param_bt_a2dp) {
                                 a2dp_suspended = param_bt_a2dp->a2dp_suspended;
-                            else
+                                is_suspend_setparam = param_bt_a2dp->is_suspend_setparam;
+                            } else {
                                 AHAL_ERR("getparam for PAL_PARAM_ID_BT_A2DP_SUSPENDED failed");
+                            }
                             param_bt_a2dp = nullptr;
                             bt_param_size = 0;
                             ret = pal_get_param(PAL_PARAM_ID_BT_A2DP_CAPTURE_SUSPENDED,
@@ -610,8 +694,8 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
                                 AHAL_ERR("getparam for BT_A2DP_CAPTURE_SUSPENDED failed");
                             param_bt_a2dp = nullptr;
                             bt_param_size = 0;
-                        } while ((a2dp_suspended || a2dp_capture_suspended) && retry_cnt-- &&
-                                 !usleep(retry_period_ms * 1000));
+                        } while (!is_suspend_setparam && (a2dp_suspended || a2dp_capture_suspended)
+                            && retry_cnt-- && !usleep(retry_period_ms * 1000));
                         AHAL_INFO("a2dp_suspended status %d and a2dp_capture_suspended status %d",
                                   a2dp_suspended, a2dp_capture_suspended);
                     }
@@ -670,7 +754,7 @@ int AudioVoice::StopCall() {
 
     AHAL_DBG("Enter");
     voice_.in_call = false;
-    for (i = 0; i < max_voice_sessions_; i++)
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++)
         voice_.session[i].state.new_ = CALL_INACTIVE;
     ret = UpdateCalls(voice_.session);
     AHAL_DBG("Exit ret: %d", ret);
@@ -686,7 +770,7 @@ bool AudioVoice::IsAnyCallActive()
 {
     int i;
 
-    for (i = 0; i < max_voice_sessions_; i++) {
+    for (i = 0; i < MAX_VOICE_SESSIONS; i++) {
         if (IsCallActive(&voice_.session[i]))
             return true;
     }
@@ -715,6 +799,12 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
     out_ch_info.channels = 2;
     out_ch_info.ch_map[0] = PAL_CHMAP_CHANNEL_FL;
     out_ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
+
+    if (voice_.crsCall && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET) {
+        AHAL_DBG("CRS force handset to speaker");
+        pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
+        pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
+    }
 
     palDevices[0].id = pal_voice_tx_device_id_;
     palDevices[0].config.ch_info = in_ch_info;
@@ -766,7 +856,7 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
             } else {
                 /*Need to add support for 3-pole Wired Headset */
                  palDevices[0].id = PAL_DEVICE_IN_WIRED_HEADSET;
-	    }
+            }
         }
         else {
             AHAL_ERR("Invalid device pair for the usecase");
@@ -823,6 +913,13 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
         AHAL_INFO("Setting custom key as %s", palDevices[0].custom_config.custom_key);
     }
 
+    /*set custom key for crsCall mode to force ringtone to play in stereo speaker and allow SVA concurrency*/
+    if (voice_.crsCall) {
+        strlcpy(palDevices[1].custom_config.custom_key, "crsCall",
+                  sizeof(palDevices[1].custom_config.custom_key));
+        AHAL_INFO("Setting custom key as %s", palDevices[1].custom_config.custom_key);
+    }
+
     //streamAttributes.in_media_config.ch_info = ch_info;
     ret = pal_stream_open(&streamAttributes,
                           2,
@@ -838,6 +935,35 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
         AHAL_ERR("Pal Stream Open Error (%x)", ret);
         ret = -EINVAL;
         goto error_open;
+    }
+
+    if (voice_.crsCall && palDevices[1].id != PAL_DEVICE_OUT_SPEAKER) {
+        AHAL_DBG("CRS Setup looback device");
+        palDevices[0].id = PAL_DEVICE_OUT_SPEAKER;
+        palDevices[0].config.ch_info = in_ch_info;
+        palDevices[0].config.sample_rate = 48000;
+        palDevices[0].config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        palDevices[0].config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+
+        streamAttributes.type = PAL_STREAM_LOOPBACK;
+        streamAttributes.direction = PAL_AUDIO_OUTPUT;
+        streamAttributes.info.opt_stream_info.loopback_type = PAL_STREAM_LOOPBACK_PLAYBACK_ONLY;
+
+        ret = pal_stream_open(&streamAttributes,
+                          1,
+                          palDevices,
+                          0,
+                          NULL,
+                          NULL,
+                          (uint64_t)this,
+                          &session->pal_voice_loopback_handle);
+
+        AHAL_DBG("pal_stream_open() for loopback device ret:%d", ret);
+        if (ret) {
+            AHAL_ERR("Pal Stream Open Error for loopback device (%x)", ret);
+            ret = -EINVAL;
+            goto error_open;
+        }
     }
 
     /*apply cached voice effects features*/
@@ -921,16 +1047,33 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
       AHAL_DBG("Pal Stream Start Success");
    }
 
+   if (voice_.crsCall && session->pal_voice_loopback_handle) {
+        ret = pal_stream_start(session->pal_voice_loopback_handle);
+        if (ret) {
+            AHAL_ERR("Pal Stream Start Error for loopback device (%x)", ret);
+            ret = pal_stream_close(session->pal_voice_loopback_handle);
+            if (ret)
+                AHAL_ERR("Pal Stream close failed for loopback device %x", ret);
+            session->pal_voice_loopback_handle = NULL;
+            ret = -EINVAL;
+        } else {
+            AHAL_DBG("Pal Stream Start Success for loopback device");
+        }
+    }
+
    /*Apply device mute if needed*/
    if (session->device_mute.mute) {
         ret = SetDeviceMute(session);
    }
+   if (voice_.crsCall) {
+        AHAL_DBG("CRS usecase mute TX");
+       pal_stream_set_mute(session->pal_voice_handle, true);
+   }
 
-   /*apply cached mic mute*/
+    /*apply cached mic mute*/
    if (adevice->mute_) {
        pal_stream_set_mute(session->pal_voice_handle, adevice->mute_);
    }
-
 
 error_open:
     AHAL_DBG("Exit ret: %d", ret);
@@ -972,13 +1115,30 @@ int AudioVoice::VoiceStop(voice_session_t *session) {
 
     AHAL_DBG("Enter");
     if (session && session->pal_voice_handle) {
+        if (voice_.crsCall && session->pal_voice_loopback_handle) {
+            ret = pal_stream_stop(session->pal_voice_loopback_handle);
+            if (ret)
+                AHAL_ERR("Pal Stream stop failed for loopback %x", ret);
+        }
         ret = pal_stream_stop(session->pal_voice_handle);
         if (ret)
             AHAL_ERR("Pal Stream stop failed %x", ret);
+
+        if (voice_.crsCall && session->pal_voice_loopback_handle) {
+            ret = pal_stream_close(session->pal_voice_loopback_handle);
+            if (ret)
+                AHAL_ERR("Pal Stream close failed for loopback %x", ret);
+        }
         ret = pal_stream_close(session->pal_voice_handle);
         if (ret)
             AHAL_ERR("Pal Stream close failed %x", ret);
         session->pal_voice_handle = NULL;
+
+        if (voice_.crsCall) {
+            session->pal_voice_loopback_handle = NULL;
+            voice_.crsCall = false;
+            voice_.in_call = false;
+        }
     }
 
     if (ret)
@@ -993,6 +1153,7 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
     struct pal_channel_info out_ch_info = {0, {0}}, in_ch_info = {0, {0}};
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
     pal_param_payload *param_payload = nullptr;
+    struct pal_stream_attributes streamAttributes;
 
     if (!session) {
         AHAL_ERR("Invalid session");
@@ -1006,6 +1167,26 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
     out_ch_info.channels = 2;
     out_ch_info.ch_map[0] = PAL_CHMAP_CHANNEL_FL;
     out_ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
+
+    //CRS Usecase, should not play through handset
+    if (voice_.crsCall && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET) {
+        AHAL_DBG("CRS force handset to speaker");
+        pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
+        pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
+    }
+
+    if (session->pal_voice_loopback_handle && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_SPEAKER) {
+        AHAL_DBG("CRS teardown for device switch");
+        ret = pal_stream_stop(session->pal_voice_loopback_handle);
+        if (ret)
+            AHAL_ERR("Pal Stream stop failed for loopback %x", ret);
+        ret = pal_stream_close(session->pal_voice_loopback_handle);
+        if (ret)
+            AHAL_ERR("Pal Stream close failed for loopback %x", ret);
+        session->pal_voice_loopback_handle = NULL;
+    }
+    if (voice_.crsCall)
+       SetVoiceVolume(voice_.crsVol);
 
     palDevices[0].id = pal_voice_tx_device_id_;
     palDevices[0].config.ch_info = in_ch_info;
@@ -1128,6 +1309,13 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
                 sizeof(palDevices[0].custom_config.custom_key));
     }
 
+    /*set custom key for crsCall mode to force ringtone to play in stereo speaker and allow SVA concurrency*/
+    if (voice_.crsCall) {
+        strlcpy(palDevices[1].custom_config.custom_key, "crsCall",
+                  sizeof(palDevices[1].custom_config.custom_key));
+        AHAL_INFO("Setting custom key as %s", palDevices[1].custom_config.custom_key);
+    }
+
     if (session && session->pal_voice_handle) {
         ret = pal_stream_set_device(session->pal_voice_handle, 2, palDevices);
         if (ret) {
@@ -1137,6 +1325,61 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
         }
     } else {
         AHAL_ERR("Voice handle not found");
+    }
+
+    if (session && session->pal_voice_handle &&
+        voice_.crsCall && palDevices[1].id != PAL_DEVICE_OUT_SPEAKER && !session->pal_voice_loopback_handle) {
+        AHAL_DBG("CRS Device switch: setup new device");
+        palDevices[0].id = PAL_DEVICE_OUT_SPEAKER;
+        palDevices[0].config.ch_info = in_ch_info;
+        palDevices[0].config.sample_rate = 48000;
+        palDevices[0].config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        palDevices[0].config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+
+        memset(&streamAttributes, 0, sizeof(streamAttributes));
+        streamAttributes.info.voice_call_info.VSID = session->vsid;
+        streamAttributes.info.voice_call_info.tty_mode = session->tty_mode;
+        streamAttributes.type = PAL_STREAM_LOOPBACK;
+        streamAttributes.direction = PAL_AUDIO_OUTPUT;
+        streamAttributes.info.opt_stream_info.loopback_type = PAL_STREAM_LOOPBACK_PLAYBACK_ONLY;
+        streamAttributes.in_media_config.sample_rate = 48000;
+        streamAttributes.in_media_config.ch_info = in_ch_info;
+        streamAttributes.in_media_config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        streamAttributes.in_media_config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+        streamAttributes.out_media_config.sample_rate = 48000;
+        streamAttributes.out_media_config.ch_info = out_ch_info;
+        streamAttributes.out_media_config.bit_width = CODEC_BACKEND_DEFAULT_BIT_WIDTH;
+        streamAttributes.out_media_config.aud_fmt_id = PAL_AUDIO_FMT_PCM_S16_LE;
+
+        ret = pal_stream_open(&streamAttributes,
+                          1,
+                          palDevices,
+                          0,
+                          NULL,
+                          NULL,
+                          (uint64_t)this,
+                          &session->pal_voice_loopback_handle);
+
+        AHAL_DBG("pal_stream_open() for loopback device ret:%d", ret);
+        if (ret) {
+            AHAL_ERR("Pal Stream Open Error for loopback device (%x)", ret);
+            ret = -EINVAL;
+            goto exit;
+        }
+
+        if (voice_.crsCall && session->pal_voice_loopback_handle) {
+            ret = pal_stream_start(session->pal_voice_loopback_handle);
+            if (ret) {
+                AHAL_ERR("Pal Stream Start Error for loopback device (%x)", ret);
+                ret = pal_stream_close(session->pal_voice_loopback_handle);
+                if (ret)
+                    AHAL_ERR("Pal Stream close failed for loopback device %x", ret);
+                session->pal_voice_loopback_handle = NULL;
+                ret = -EINVAL;
+            }
+        }
+        else
+            AHAL_DBG("Pal Stream Start Success for loopback device");
     }
 
     /* apply device mute if needed*/
@@ -1155,7 +1398,7 @@ int AudioVoice::SetMicMute(bool mute) {
 
     AHAL_DBG("Enter mute: %d", mute);
     if (session) {
-        for (int i = 0; i < max_voice_sessions_; i++) {
+        for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
             if (session[i].pal_voice_handle) {
                 ret = pal_stream_set_mute(session[i].pal_voice_handle, mute);
                 if (ret)
@@ -1175,7 +1418,7 @@ int AudioVoice::SetVoiceVolume(float volume) {
     AHAL_DBG("Enter vol: %f", volume);
     if (session) {
 
-        for (int i = 0; i < max_voice_sessions_; i++) {
+        for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
             /* APM volume is cached when voice call is not active
              * cached volume is applied in voicestart before pal_stream_start
              */
@@ -1258,7 +1501,6 @@ void AudioVoice::updateVoiceMetadataForBT(bool call_active)
 AudioVoice::AudioVoice() {
 
     voice_.in_call = false;
-    max_voice_sessions_ = MAX_VOICE_SESSIONS;
     pal_vol_ = NULL;
     pal_vol_ = (struct pal_volume_data*)malloc(sizeof(uint32_t)
         + sizeof(struct pal_channel_vol_kv));
@@ -1270,7 +1512,7 @@ AudioVoice::AudioVoice() {
         AHAL_ERR("volume malloc failed %s", strerror(errno));
     }
 
-    for (int i = 0; i < max_voice_sessions_; i++) {
+    for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
         voice_.session[i].state.current_ = CALL_INACTIVE;
         voice_.session[i].state.new_ = CALL_INACTIVE;
         voice_.session[i].vsid = VOICEMMODE1_VSID;
@@ -1288,7 +1530,8 @@ AudioVoice::AudioVoice() {
 
     voice_.session[MMODE1_SESS_IDX].vsid = VOICEMMODE1_VSID;
     voice_.session[MMODE2_SESS_IDX].vsid = VOICEMMODE2_VSID;
-
+    voice_.crsVsid = 0;
+    voice_.crsVol = 0;
     stream_out_primary_ = NULL;
 }
 
@@ -1298,7 +1541,7 @@ AudioVoice::~AudioVoice() {
     if (pal_vol_)
         free(pal_vol_);
 
-    for (int i = 0; i < max_voice_sessions_; i++) {
+    for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
         voice_.session[i].state.current_ = CALL_INACTIVE;
         voice_.session[i].state.new_ = CALL_INACTIVE;
         voice_.session[i].vsid = VOICEMMODE1_VSID;
@@ -1315,6 +1558,5 @@ AudioVoice::~AudioVoice() {
     voice_.session[MMODE2_SESS_IDX].vsid = VOICEMMODE2_VSID;
 
     stream_out_primary_ = NULL;
-    max_voice_sessions_ = 0;
 }
 

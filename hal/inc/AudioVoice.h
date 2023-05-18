@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,6 +25,11 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Changes from Qualcomm Innovation Center are provided under the following license:
+ *
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #ifndef ANDROID_HARDWARE_AHAL_VOICE_H_
@@ -60,7 +64,9 @@
 #define AUDIO_PARAMETER_VALUE_TTY_VCO "tty_vco"
 #define AUDIO_PARAMETER_VALUE_TTY_HCO "tty_hco"
 #define AUDIO_PARAMETER_VALUE_TTY_FULL "tty_full"
-
+#define AUDIO_PARAMETER_KEY_CRS_CALL_SUPPORTED "isCRSsupported"
+#define AUDIO_PARAMETER_KEY_CRS_ACTIVE "crs_call"
+#define AUDIO_PARAMETER_KEY_CRS_VOLUME "CRS_volume"
 #define CODEC_BACKEND_DEFAULT_BIT_WIDTH 16
 
 class AudioVoice {
@@ -74,6 +80,8 @@ public:
             uint32_t vsid;
             uint32_t tty_mode;
             pal_stream_handle_t*  pal_voice_handle;
+            pal_stream_handle_t* pal_voice_loopback_handle;
+
             bool volume_boost;
             bool slow_talk;
             bool hd_voice;
@@ -84,6 +92,9 @@ public:
     struct voice_t {
             voice_session_t session[MAX_VOICE_SESSIONS];
             bool in_call;
+            bool crsCall;
+            uint32_t crsVsid;
+            float crsVol;
     };
     voice_t voice_;
     audio_mode_t mode_;
@@ -95,7 +106,6 @@ public:
     bool is_valid_call_state(int call_state);
     bool get_voice_call_state(audio_mode_t *mode);
     bool is_valid_vsid(uint32_t vsid);
-    int max_voice_sessions_;
     std::mutex voice_mutex_;
     int SetMode(const audio_mode_t mode);
     int VoiceStart(voice_session_t *session);
@@ -106,6 +116,7 @@ public:
     int UpdateCalls(voice_session_t *pSession);
     int SetMicMute(bool mute);
     int SetVoiceVolume(float volume);
+    void MapCrsVolume(int CrsVolumeIndex);
     int GetMatchingTxDevices(const std::set<audio_devices_t>& rx_devs,
                              std::set<audio_devices_t>& tx_devs);
     bool IsCallActive(voice_session_t *pSession);
