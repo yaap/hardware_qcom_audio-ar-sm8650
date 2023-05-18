@@ -343,6 +343,16 @@ int AudioExtn::audio_extn_parse_compress_metadata(struct audio_config *config_, 
             *isCompressMetadataAvail = true;
             pal_snd_dec->opus_dec.num_channels = atoi(value);
         }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_BITSTREAM_FORMAT, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.bitstream_format = (uint16_t)atoi(value);
+        }
+        ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_PAYLOAD_TYPE, value, sizeof(value));
+        if (ret >= 0) {
+            *isCompressMetadataAvail = true;
+            pal_snd_dec->opus_dec.payload_type = (uint16_t)atoi(value);
+        }
         ret = str_parms_get_str(parms, AUDIO_OFFLOAD_CODEC_OPUS_PRE_SKIP, value, sizeof(value));
         if (ret >= 0) {
             *isCompressMetadataAvail = true;
@@ -415,7 +425,7 @@ int AudioExtn::audio_extn_parse_compress_metadata(struct audio_config *config_, 
 
         AHAL_DBG("OPUS params: version %d, num_channels %d, pre_skip %d,"
                 " sample_rate %d, output_gain %d, mapping_family %d,"
-                " stream_count %d, coupled_count %d",
+                " stream_count %d, coupled_count %d bitstream_format %d payload_type %d",
                 pal_snd_dec->opus_dec.version,
                 pal_snd_dec->opus_dec.num_channels,
                 pal_snd_dec->opus_dec.pre_skip,
@@ -423,7 +433,9 @@ int AudioExtn::audio_extn_parse_compress_metadata(struct audio_config *config_, 
                 pal_snd_dec->opus_dec.output_gain,
                 pal_snd_dec->opus_dec.mapping_family,
                 pal_snd_dec->opus_dec.stream_count,
-                pal_snd_dec->opus_dec.coupled_count);
+                pal_snd_dec->opus_dec.coupled_count,
+                pal_snd_dec->opus_dec.bitstream_format,
+                pal_snd_dec->opus_dec.payload_type);
         AHAL_DBG("channel map:");
         for (int i = 0; i < pal_snd_dec->opus_dec.num_channels; i++) {
             AHAL_DBG("%d", pal_snd_dec->opus_dec.channel_map[i]);
