@@ -682,17 +682,108 @@ static int astream_dump(const struct audio_stream *stream, int fd) {
 }
 #ifdef USEHIDL7_1
 static int astream_set_latency_mode(struct audio_stream_out *stream, audio_latency_mode_t mode) {
-    std::ignore = stream;
-    std::ignore = mode;
-    return -ENOSYS;
+    std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
+    std::shared_ptr<StreamOutPrimary> astream_out;
+    pal_param_latency_mode_t *param_latency_mode_ptr = NULL;
+    int ret = 0;
+
+    if (adevice) {
+        astream_out = adevice->OutGetStream((audio_stream_t*)stream);
+    } else {
+        AHAL_ERR("unable to get audio device");
+        ret = -EINVAL;
+        goto exit;
+    }
+
+    param_latency_mode_ptr = (pal_param_latency_mode_t *)calloc(1, sizeof(pal_param_latency_mode_t));
+    if (!param_latency_mode_ptr) {
+        AHAL_ERR("Failed to allocate memory for set_latency_mode");
+        ret = -ENOMEM;
+        goto exit;
+    }
+
+    if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
+    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
+    } else {
+        ret = -EINVAL;
+        goto exit;
+    }
+    param_latency_mode_ptr->num_modes = 1;
+    param_latency_mode_ptr->modes[0] = mode;
+
+    ret = pal_set_param(PAL_PARAM_ID_LATENCY_MODE, (void *)param_latency_mode_ptr, sizeof(pal_param_latency_mode_t));
+
+exit:
+    if (param_latency_mode_ptr) {
+        free(param_latency_mode_ptr);
+        param_latency_mode_ptr = NULL;
+    }
+    return ret;
 }
 
 static int astream_get_recommended_latency_modes(struct audio_stream_out *stream,
                                                 audio_latency_mode_t *modes, size_t *num_modes) {
-    std::ignore = stream;
-    std::ignore = modes;
-    std::ignore = num_modes;
-    return -ENOSYS;
+    std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
+    std::shared_ptr<StreamOutPrimary> astream_out;
+    pal_param_latency_mode_t *param_latency_mode_ptr = NULL;
+    int ret = 0;
+    size_t size;
+
+    if (adevice) {
+        astream_out = adevice->OutGetStream((audio_stream_t*)stream);
+    } else {
+        AHAL_ERR("unable to get audio device");
+        ret = -EINVAL;
+        goto exit;
+    }
+
+    param_latency_mode_ptr = (pal_param_latency_mode_t *)calloc(1, sizeof(pal_param_latency_mode_t));
+    if (!param_latency_mode_ptr) {
+        AHAL_ERR("Failed to allocate memory for get_recommended_latency_modes");
+        ret = -ENOMEM;
+        goto exit;
+    }
+
+    param_latency_mode_ptr->num_modes = PAL_MAX_LATENCY_MODES; // initialize with max size of modes supported
+    if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
+    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
+    } else {
+        ret = -EINVAL;
+        goto exit;
+    }
+    ret = pal_get_param(PAL_PARAM_ID_LATENCY_MODE, (void **)&param_latency_mode_ptr, &size, nullptr);
+    if (ret) {
+        goto exit;
+    }
+    AHAL_VERBOSE("max number of latency modes to return: %d, actual number of latency modes %d",
+          *num_modes, param_latency_mode_ptr->num_modes);
+    /*
+     * *num_modes as input is maximum number of modes to return.
+     * The check is to handle - if the returned modes exceed the
+     * allocated memory by audio fwk, return invalid
+     */
+    if (*num_modes < param_latency_mode_ptr->num_modes) {
+        AHAL_ERR("Not enough memory to copy all latency modes");
+        ret = -EINVAL;
+        goto exit;
+    }
+    memcpy(modes, param_latency_mode_ptr->modes, sizeof(uint32_t) * param_latency_mode_ptr->num_modes);
+    *num_modes = param_latency_mode_ptr->num_modes; // assign the actual number of modes returned
+
+exit:
+    if (param_latency_mode_ptr) {
+        free(param_latency_mode_ptr);
+        param_latency_mode_ptr = NULL;
+    }
+    return ret;
 }
 
 static int astream_set_latency_mode_callback(struct audio_stream_out *stream,
