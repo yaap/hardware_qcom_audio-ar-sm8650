@@ -62,10 +62,16 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
             VoiceSetDevice(voice_.session);
         } else {
             mode_ = mode;
-            if (voice_.in_call && mode == AUDIO_MODE_NORMAL)
+            if ((voice_.in_call && mode == AUDIO_MODE_NORMAL) ||
+                (mode_ == AUDIO_MODE_IN_CALL && voice_.crsCall))
                 ret = StopCall();
-            else if (mode ==  AUDIO_MODE_CALL_SCREEN)
+            else if (mode ==  AUDIO_MODE_CALL_SCREEN || !voice_.crsCall) {
+                if (mode_ == AUDIO_MODE_RINGTONE && voice_.crsVsid != 0) {
+                    voice_.in_call = true;
+                    voice_.crsCall = true;
+                }
                 UpdateCalls(voice_.session);
+            }
         }
     }
     AHAL_DBG("Exit ret: %d", ret);
@@ -136,8 +142,13 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
         }
 
         if (is_valid_vsid(vsid) && is_valid_call_state(call_state)) {
-            if (!voice_.crsCall)
+            if (!voice_.crsCall) {
+                if (mode_ == AUDIO_MODE_RINGTONE && vsid == voice_.crsVsid) {
+                    voice_.in_call = true;
+                    voice_.crsCall = true;
+                }
                 ret = UpdateCallState(vsid, call_state);
+            }
         } else {
             AHAL_ERR("invalid vsid:%x or call_state:%d",
                      vsid, call_state);
@@ -629,7 +640,8 @@ int AudioVoice::UpdateCallState(uint32_t vsid, int call_state) {
         AHAL_DBG("is_call_active:%d in_call:%d, mode:%d",
                  is_call_active, voice_.in_call, mode_);
         if (is_call_active ||
-                (voice_.in_call && (mode_ == AUDIO_MODE_IN_CALL || mode_ == AUDIO_MODE_CALL_SCREEN))) {
+            (voice_.in_call && (mode_ == AUDIO_MODE_IN_CALL || mode_ == AUDIO_MODE_CALL_SCREEN)) ||
+            (voice_.crsCall && mode_ == AUDIO_MODE_RINGTONE && session->vsid == voice_.crsVsid)) {
             ret = UpdateCalls(voice_.session);
         }
     } else {
@@ -1540,7 +1552,7 @@ AudioVoice::AudioVoice() {
     voice_.session[MMODE1_SESS_IDX].vsid = VOICEMMODE1_VSID;
     voice_.session[MMODE2_SESS_IDX].vsid = VOICEMMODE2_VSID;
     voice_.crsVsid = 0;
-    voice_.crsVol = 0;
+    voice_.crsVol = 0.4;
     stream_out_primary_ = NULL;
 }
 
