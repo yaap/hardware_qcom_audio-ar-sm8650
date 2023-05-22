@@ -1100,16 +1100,20 @@ static int adev_dump(const audio_hw_device_t *device, int fd)
 {
     dprintf(fd, " \n");
     dprintf(fd, "PrimaryHal adev: \n");
-    int major =  (device->common.version >> 8) & 0xff;
-    int minor =   device->common.version & 0xff;
+    int major = (device->common.version >> 8) & 0xff;
+    int minor = device->common.version & 0xff;
     dprintf(fd, "Device API Version: %d.%d \n", major, minor);
-
 #ifdef PAL_HIDL_ENABLED
-    dprintf(fd, "PAL HIDL enabled");
+    dprintf(fd, "PAL HIDL enabled \n");
 #else
-    dprintf(fd, "PAL HIDL disabled");
+    dprintf(fd, "PAL HIDL disabled \n");
 #endif
 
+    audio_hw_device *dev = const_cast<audio_hw_device_t *>(device);
+    std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance(dev);
+    if (adevice) {
+        dprintf(fd, "Offload Variable PlaybackRate %d \n", adevice->isOffloadSpeedSupported());
+    }
     return 0;
 }
 
@@ -1234,7 +1238,7 @@ int AudioDevice::Init(hw_device_t **device, const hw_module_t *module) {
     voice_ = VoiceInit();
     mute_ = false;
     current_rotation = PAL_SPEAKER_ROTATION_LR;
-
+    mOffloadSpeedSupported = property_get_bool("vendor.audio.offload.playspeed", false);
     FillAndroidDeviceMap();
     audio_extn_gef_init(adev_);
     adev_init_ref_count += 1;
@@ -2122,6 +2126,13 @@ char* AudioDevice::GetParameters(const char *keys) {
     }
 
     AHAL_VERBOSE("enter");
+
+    ret = str_parms_get_str(query, "offloadVariableRateSupported",
+                            value, sizeof(value));
+    if (ret >= 0) {
+        str_parms_add_int(reply, "offloadVariableRateSupported", mOffloadSpeedSupported);
+        AHAL_INFO("offloadVariableRateSupported = %d", mOffloadSpeedSupported);
+    }
 
     ret = str_parms_get_str(query, AUDIO_PARAMETER_A2DP_RECONFIG_SUPPORTED,
                             value, sizeof(value));

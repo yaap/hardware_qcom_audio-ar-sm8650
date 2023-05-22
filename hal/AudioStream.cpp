@@ -1005,6 +1005,48 @@ static int astream_out_set_volume(struct audio_stream_out *stream,
     }
 }
 
+static int out_get_playback_rate_parameters(struct audio_stream_out *stream,
+                                           audio_playback_rate_t *playbackRate) {
+
+    std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
+    std::shared_ptr<StreamOutPrimary> astream_out;
+
+    if (adevice) {
+        astream_out = adevice->OutGetStream((audio_stream_t*)stream);
+    } else {
+        AHAL_ERR("unable to get audio device");
+        return -ENOSYS;
+    }
+
+    if (astream_out) {
+        return astream_out->getPlaybackRateParameters(playbackRate);
+    } else {
+        AHAL_ERR("unable to get audio stream");
+        return -ENOSYS;
+    }
+}
+
+static int out_set_playback_rate_parameters(struct audio_stream_out *stream,
+                                            const audio_playback_rate_t *playbackRate) {
+
+    std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
+    std::shared_ptr<StreamOutPrimary> astream_out;
+
+    if (adevice) {
+        astream_out = adevice->OutGetStream((audio_stream_t*)stream);
+    } else {
+        AHAL_ERR("unable to get audio device");
+        return -ENOSYS;
+    }
+
+    if (astream_out) {
+        return astream_out->setPlaybackRateParameters(playbackRate);
+    } else {
+        AHAL_ERR("unable to get audio stream");
+        return -ENOSYS;
+    }
+}
+
 static void out_update_source_metadata_v7(
                                 struct audio_stream_out *stream,
                                 const struct source_metadata_v7 *source_metadata) {
@@ -3718,6 +3760,116 @@ int StreamOutPrimary::SetAggregateSourceMetadata(bool voice_active) {
     return ret;
 }
 
+bool StreamOutPrimary::isOffloadSpeedSupported() {
+    std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
+    return adevice ? adevice->isOffloadSpeedSupported() : false;
+}
+
+bool StreamOutPrimary::isValidStretchMode(audio_timestretch_stretch_mode_t stretchMode) {
+    switch (stretchMode) {
+        case AUDIO_TIMESTRETCH_STRETCH_DEFAULT:
+        case AUDIO_TIMESTRETCH_STRETCH_VOICE:
+            return true;
+        default:
+            return false;
+    }
+    return false;
+}
+
+bool StreamOutPrimary::isValidFallbackMode(audio_timestretch_fallback_mode_t fallbackMode) {
+    switch (fallbackMode) {
+        case AUDIO_TIMESTRETCH_FALLBACK_MUTE:
+        case AUDIO_TIMESTRETCH_FALLBACK_FAIL:
+            return true;
+        default:
+            return false;
+    }
+    return false;
+}
+
+bool StreamOutPrimary::isValidPlaybackRate(const audio_playback_rate_t *playbackRate) {
+    if (playbackRate->mSpeed < 0.1f || playbackRate->mSpeed > 2.0f) {
+        AHAL_ERR("unsupported speed %f", playbackRate->mSpeed);
+        return false;
+    }
+    if (playbackRate->mPitch != 1.0f) {
+        AHAL_ERR("unsupported pitch %f", playbackRate->mPitch);
+        return false;
+    }
+    if (!isValidStretchMode(playbackRate->mStretchMode)) {
+        AHAL_ERR("unsupported timestretchmode %d", playbackRate->mStretchMode);
+        return false;
+    }
+    if (!isValidFallbackMode(playbackRate->mFallbackMode)) {
+        AHAL_ERR("unsupported fallbackmode %d", playbackRate->mFallbackMode);
+        return false;
+    }
+
+    return true;
+}
+
+int StreamOutPrimary::getPlaybackRateParameters(audio_playback_rate_t *playbackRate) {
+
+    *playbackRate = mPlaybackRate;
+    AHAL_DBG("Speed %f, pitch %f StrechMode %d, fallbackMode %d", playbackRate->mSpeed,
+                playbackRate->mPitch, playbackRate->mStretchMode, playbackRate->mFallbackMode);
+    return 0;
+}
+
+int StreamOutPrimary::setPlaybackRateParameters(const audio_playback_rate_t *playbackRate) {
+
+    if (!isValidPlaybackRate(playbackRate)) {
+        AHAL_ERR("unsupported rate Speed %f, pitch %f StrechMode %d, fallbackMode %d",
+                playbackRate->mSpeed, playbackRate->mPitch, playbackRate->mStretchMode,
+                playbackRate->mFallbackMode);
+        return -ENOSYS;
+    }
+
+    int ret = setPlaybackRateToPal(playbackRate);
+    if (0 == ret) {
+        mPlaybackRate = *playbackRate;
+
+        AHAL_INFO("speed %f, pitch %f strechMode %d, fallbackMode %d", playbackRate->mSpeed,
+                playbackRate->mPitch, playbackRate->mStretchMode, playbackRate->mFallbackMode);
+        return 0;
+    } else if (-ENOSYS == ret) {
+        return ret;
+    }
+
+    return -EINVAL;
+}
+
+int StreamOutPrimary::setPlaybackRateToPal(const audio_playback_rate_t *playbackRate) {
+
+    if (!pal_stream_handle_) {
+        AHAL_DBG("stream inactive, can't set playback rate");
+        return -ENOSYS;
+    }
+    pal_param_payload *palParamPayload = (pal_param_payload *) calloc (1,
+                                            sizeof(pal_param_payload) +
+                                            sizeof(pal_param_playback_rate_t));
+
+    if (!palParamPayload) {
+         AHAL_ERR("memory allocation failed for playback rate params");
+        return -ENOMEM;
+    }
+
+    palParamPayload->payload_size = sizeof(pal_param_playback_rate_t);
+
+    pal_param_playback_rate_t palPlaybackRate;
+    palPlaybackRate.speed = playbackRate->mSpeed;
+    palPlaybackRate.pitch = playbackRate->mPitch;
+
+    memcpy(palParamPayload->payload, &palPlaybackRate, palParamPayload->payload_size);
+
+    int ret = pal_stream_set_param(pal_stream_handle_,
+                                    PAL_PARAM_ID_TIMESTRETCH_PARAMS,
+                                    palParamPayload);
+
+    free(palParamPayload);
+    return ret;
+}
+
 StreamOutPrimary::StreamOutPrimary(
                         audio_io_handle_t handle,
                         const std::set<audio_devices_t> &devices,
@@ -3908,6 +4060,11 @@ StreamOutPrimary::StreamOutPrimary(
         stream_.get()->stop = astream_out_mmap_noirq_stop;
         stream_.get()->create_mmap_buffer = astream_out_create_mmap_buffer;
         stream_.get()->get_mmap_position = astream_out_get_mmap_position;
+    }
+
+    if (isOffloadSpeedSupported() && isOffloadUsecase()) {
+        stream_.get()->set_playback_rate_parameters = out_set_playback_rate_parameters;
+        stream_.get()->get_playback_rate_parameters = out_get_playback_rate_parameters;
     }
 
     if (usecase_ == USECASE_AUDIO_PLAYBACK_WITH_HAPTICS) {
