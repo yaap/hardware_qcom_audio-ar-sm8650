@@ -95,6 +95,7 @@ public:
             bool crsCall;
             uint32_t crsVsid;
             float crsVol;
+            bool crsLoopback;
     };
     voice_t voice_;
     audio_mode_t mode_;
