@@ -3731,6 +3731,11 @@ int StreamOutPrimary::SetAggregateSourceMetadata(bool voice_active) {
             track_count_total += astream_out_list[i]->btSourceMetadata.track_count;
         }
 
+        if (track_count_total == 0) {
+            AHAL_VERBOSE("total track count is 0, return without setting SourceMetadata");
+            return 0;
+        }
+
         total_tracks.resize(track_count_total);
         btSourceMetadata.track_count = track_count_total;
         btSourceMetadata.tracks = total_tracks.data();
@@ -4439,6 +4444,11 @@ int StreamInPrimary::SetAggregateSinkMetadata(bool voice_active) {
         for (int i = 0; i < astream_in_list.size(); i++) {
             //total tracks on stream i/ps
             track_count_total += astream_in_list[i]->btSinkMetadata.track_count;
+        }
+
+        if (track_count_total == 0) {
+            AHAL_VERBOSE("total track count is 0, return without settng SinkMetadata");
+            return 0;
         }
 
         total_tracks.resize(track_count_total);
