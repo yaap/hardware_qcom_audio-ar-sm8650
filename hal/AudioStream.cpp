@@ -5176,7 +5176,8 @@ StreamInPrimary::StreamInPrimary(audio_io_handle_t handle,
     mAndroidInDevices(devices),
     flags_(flags),
     btSinkMetadata{0, nullptr},
-    mCompressEncoder(nullptr)
+    mCompressEncoder(nullptr),
+    pal_vui_handle_(nullptr)
 {
     stream_ = std::shared_ptr<audio_stream_in> (new audio_stream_in());
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
