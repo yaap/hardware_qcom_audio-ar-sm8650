@@ -2158,7 +2158,7 @@ int StreamOutPrimary::Pause() {
             timestamp_pause = TS_TO_NS(ts_pause);
 
             timedelta = (timestamp_pause - timestamp_first_write) / 1000000LL;
-            AHAL_DBG("timestamp_pause :%ld, timestamp_first_write: %ld, timedelta: %ld",
+            AHAL_DBG("timestamp_pause :%ld, timestamp_first_write: %ld, timedelta: %d",
                       timestamp_pause, timestamp_first_write, timedelta);
             if (timedelta < RAMP_UP_DELAY) {
                 AHAL_DBG("pending pause for %d ms", RAMP_UP_DELAY - timedelta);
@@ -5186,8 +5186,8 @@ StreamInPrimary::StreamInPrimary(audio_io_handle_t handle,
     mAndroidInDevices(devices),
     flags_(flags),
     btSinkMetadata{0, nullptr},
-    mCompressEncoder(nullptr),
-    pal_vui_handle_(nullptr)
+    pal_vui_handle_(nullptr),
+    mCompressEncoder(nullptr)
 {
     stream_ = std::shared_ptr<audio_stream_in> (new audio_stream_in());
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
