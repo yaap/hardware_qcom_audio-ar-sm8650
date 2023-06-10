@@ -162,7 +162,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
         float crsVol = voice_.crsVol;
         if (value >= 0) {
             MapCrsVolume(value);
-            if (voice_.crsCall && crsVol != voice_.crsVol)
+            if (voice_.crsVsid && crsVol != voice_.crsVol)
                 SetVoiceVolume(voice_.crsVol);
         } else
             AHAL_ERR("Invalid CRS Volume");
@@ -1041,7 +1041,19 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
     }
 
     /* apply cached volume set by APM */
-    if (session->pal_voice_handle && session->pal_vol_data &&
+    if (voice_.crsCall) {
+        if (session->pal_voice_handle && session->pal_vol_crs_data &&
+            session->pal_vol_crs_data->volume_pair[0].vol != -1.0) {
+            ret = pal_stream_set_volume(session->pal_voice_handle, session->pal_vol_crs_data);
+            if (ret)
+               AHAL_ERR("Failed to apply volume on crs session %x", ret);
+        } else {
+            if (!session->pal_voice_handle || !session->pal_vol_crs_data)
+               AHAL_ERR("Invalid voice handle or crs volume data");
+            if (session->pal_vol_crs_data && session->pal_vol_crs_data->volume_pair[0].vol == -1.0)
+               AHAL_DBG("crs session volume is not set");
+        }
+    } else if (session->pal_voice_handle && session->pal_vol_data &&
         session->pal_vol_data->volume_pair[0].vol != -1.0) {
         ret = pal_stream_set_volume(session->pal_voice_handle, session->pal_vol_data);
         if (ret)
@@ -1433,17 +1445,24 @@ int AudioVoice::SetVoiceVolume(float volume) {
     int ret = 0;
     voice_session_t *session = voice_.session;
 
-    if (voice_.crsCall)
-        volume = voice_.crsVol;
-
     AHAL_DBG("Enter vol: %f", volume);
     if (session) {
-
         for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
             /* APM volume is cached when voice call is not active
              * cached volume is applied in voicestart before pal_stream_start
              */
-            if (session[i].pal_vol_data) {
+            if (voice_.crsVsid || voice_.crsCall) {
+                if (session[i].pal_vol_crs_data) {
+                    session[i].pal_vol_crs_data->volume_pair[0].vol = voice_.crsVol;
+                    if (session[i].pal_voice_handle) {
+                        ret = pal_stream_set_volume(session[i].pal_voice_handle,
+                                 session[i].pal_vol_crs_data);
+                        AHAL_DBG("volume applied on crs session %d status %x", i, ret);
+                    } else {
+                        AHAL_DBG("volume is cached on crs session %d", i);
+                    }
+                }
+            } else if (session[i].pal_vol_data) {
                 session[i].pal_vol_data->volume_pair[0].vol = volume;
                 if (session[i].pal_voice_handle) {
                     ret = pal_stream_set_volume(session[i].pal_voice_handle,
@@ -1531,7 +1550,20 @@ AudioVoice::AudioVoice() {
         pal_vol_->volume_pair[0].vol = -1.0;
     } else {
         AHAL_ERR("volume malloc failed %s", strerror(errno));
+        return;
     }
+
+     pal_crs_vol_ = NULL;
+     pal_crs_vol_ = (struct pal_volume_data*)malloc(sizeof(uint32_t)
+           + sizeof(struct pal_channel_vol_kv));
+     if (pal_crs_vol_) {
+         pal_crs_vol_->no_of_volpair = 1;
+         pal_crs_vol_->volume_pair[0].channel_mask = 0x01;
+         pal_crs_vol_->volume_pair[0].vol = -1.0;
+     } else {
+         AHAL_ERR("crs volume malloc failed %s", strerror(errno));
+         return;
+     }
 
     for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
         voice_.session[i].state.current_ = CALL_INACTIVE;
@@ -1544,6 +1576,7 @@ AudioVoice::AudioVoice() {
         voice_.session[i].pal_voice_handle = NULL;
         voice_.session[i].hd_voice = false;
         voice_.session[i].pal_vol_data = pal_vol_;
+        voice_.session[i].pal_vol_crs_data = pal_crs_vol_;
         voice_.session[i].device_mute.dir = PAL_AUDIO_OUTPUT;
         voice_.session[i].device_mute.mute = false;
         voice_.session[i].hac = false;
@@ -1561,6 +1594,8 @@ AudioVoice::~AudioVoice() {
     voice_.in_call = false;
     if (pal_vol_)
         free(pal_vol_);
+    if (pal_crs_vol_)
+        free(pal_crs_vol_);
 
     for (int i = 0; i < MAX_VOICE_SESSIONS; i++) {
         voice_.session[i].state.current_ = CALL_INACTIVE;
@@ -1572,6 +1607,7 @@ AudioVoice::~AudioVoice() {
         voice_.session[i].pal_voice_handle = NULL;
         voice_.session[i].hd_voice = false;
         voice_.session[i].pal_vol_data = NULL;
+        voice_.session[i].pal_vol_crs_data = NULL;
         voice_.session[i].hac = false;
     }
 
