@@ -485,6 +485,7 @@ public:
     bool GetSupportedConfig(bool isOutStream,
                             struct str_parms *query, struct str_parms *reply);
     virtual int RouteStream(const std::set<audio_devices_t>&, bool force_device_switch = false) = 0;
+    bool isStarted() { return stream_started_; };
 protected:
     struct pal_stream_attributes streamAttributes_;
     pal_stream_handle_t*      pal_stream_handle_;

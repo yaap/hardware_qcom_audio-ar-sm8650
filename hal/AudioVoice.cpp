@@ -50,6 +50,7 @@
 
 
 int AudioVoice::SetMode(const audio_mode_t mode) {
+    std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
     int ret = 0;
 
     AHAL_DBG("Enter: mode: %d", mode);
@@ -69,6 +70,10 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
                 if (mode_ == AUDIO_MODE_RINGTONE && voice_.crsVsid != 0) {
                     voice_.in_call = true;
                     voice_.crsCall = true;
+                    //check CRS concurrent case happen
+                    if (adevice->getCrsConcurrentState()) {
+                        voice_.crsLoopback = false;
+                    }
                 }
                 UpdateCalls(voice_.session);
             }
@@ -484,25 +489,16 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
     bool a2dp_capture_suspended = false;
     int retry_cnt = 20;
     const int retry_period_ms = 100;
-    std::set<audio_devices_t> crs_devices;
     bool is_suspend_setparam = false;
 
     AHAL_DBG("Enter");
 
-    if (AudioExtn::audio_devices_empty(rx_devices)){
+    if (AudioExtn::audio_devices_empty(rx_devices) || rx_devices.size() > 1){
         AHAL_ERR("invalid routing device %d", AudioExtn::get_device_types(rx_devices));
         goto exit;
     }
 
-    if(voice_.crsCall && rx_devices.size() > 1) {
-        crs_devices = rx_devices;
-        std::set<audio_devices_t>::iterator pos = crs_devices.find(AUDIO_DEVICE_OUT_SPEAKER);
-        if(pos != crs_devices.end())
-            crs_devices.erase(pos);
-        GetMatchingTxDevices(crs_devices, tx_devices);
-        SetVoiceVolume(voice_.crsVol);
-    } else
-        GetMatchingTxDevices(rx_devices, tx_devices);
+    GetMatchingTxDevices(rx_devices, tx_devices);
 
     /**
      * if device_none is in Tx/Rx devices,
@@ -527,12 +523,7 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
     AHAL_DBG("Routing is %d", AudioExtn::get_device_types(rx_devices));
 
     if (stream_out_primary_) {
-        if(voice_.crsCall && rx_devices.size() > 1)
-            stream_out_primary_->getPalDeviceIds(crs_devices, pal_device_ids);
-
-        else
-            stream_out_primary_->getPalDeviceIds(rx_devices, pal_device_ids);
-
+        stream_out_primary_->getPalDeviceIds(rx_devices, pal_device_ids);
         pal_rx_device = pal_device_ids[0];
         memset(pal_device_ids, 0, device_count * sizeof(pal_device_id_t));
         stream_out_primary_->getPalDeviceIds(tx_devices, pal_device_ids);
@@ -815,11 +806,14 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
     out_ch_info.ch_map[0] = PAL_CHMAP_CHANNEL_FL;
     out_ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
 
-    if (voice_.crsCall && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET) {
-        AHAL_DBG("CRS force handset to speaker");
-        pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
-        pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
+    if (voice_.crsCall) {
+        if (voice_.crsLoopback && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET) {
+             AHAL_DBG("CRS force handset to speaker");
+             pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
+             pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
+        }
     }
+
 
     if (voice_.crsCall)
        SetVoiceVolume(voice_.crsVol);
@@ -955,7 +949,8 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
         goto error_open;
     }
 
-    if (voice_.crsCall && palDevices[1].id != PAL_DEVICE_OUT_SPEAKER) {
+    if (voice_.crsCall && voice_.crsLoopback &&
+        palDevices[1].id != PAL_DEVICE_OUT_SPEAKER) {
         AHAL_DBG("CRS Setup looback device");
         palDevices[0].id = PAL_DEVICE_OUT_SPEAKER;
         palDevices[0].config.ch_info = out_ch_info;
@@ -1168,6 +1163,7 @@ int AudioVoice::VoiceStop(voice_session_t *session) {
             session->pal_voice_loopback_handle = NULL;
             voice_.crsCall = false;
             voice_.in_call = false;
+            voice_.crsLoopback = true;
         }
     }
 
@@ -1198,14 +1194,7 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
     out_ch_info.ch_map[0] = PAL_CHMAP_CHANNEL_FL;
     out_ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
 
-    //CRS Usecase, should not play through handset
-    if (voice_.crsCall && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET) {
-        AHAL_DBG("CRS force handset to speaker");
-        pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
-        pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
-    }
-
-    if (session->pal_voice_loopback_handle && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_SPEAKER) {
+    if (session->pal_voice_loopback_handle) {
         AHAL_DBG("CRS teardown for device switch");
         ret = pal_stream_stop(session->pal_voice_loopback_handle);
         if (ret)
@@ -1357,7 +1346,7 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
         AHAL_ERR("Voice handle not found");
     }
 
-    if (session && session->pal_voice_handle &&
+    if (session && session->pal_voice_handle && voice_.crsLoopback &&
         voice_.crsCall && palDevices[1].id != PAL_DEVICE_OUT_SPEAKER && !session->pal_voice_loopback_handle) {
         AHAL_DBG("CRS Device switch: setup new device");
         palDevices[0].id = PAL_DEVICE_OUT_SPEAKER;
@@ -1586,6 +1575,7 @@ AudioVoice::AudioVoice() {
     voice_.session[MMODE2_SESS_IDX].vsid = VOICEMMODE2_VSID;
     voice_.crsVsid = 0;
     voice_.crsVol = 0.4;
+    voice_.crsLoopback = true;
     stream_out_primary_ = NULL;
 }
 

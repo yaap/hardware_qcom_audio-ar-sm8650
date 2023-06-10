@@ -170,6 +170,7 @@ public:
     bool mute_;
     int GetMicMute(bool *state);
     int SetParameters(const char *kvpairs);
+    bool getCrsConcurrentState();
     char* GetParameters(const char *keys);
     int SetMode(const audio_mode_t mode);
     int SetVoiceVolume(float volume);

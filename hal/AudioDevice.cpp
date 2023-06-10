@@ -1443,6 +1443,21 @@ int AudioDevice::add_input_headset_if_usb_out_headset(int *device_count,
     return 0;
 }
 
+bool AudioDevice::getCrsConcurrentState() {
+     std::shared_ptr<StreamOutPrimary> astream_out = NULL;
+     audio_stream_out* stream_out = NULL;
+
+     for (int i = 0; i < stream_out_list_.size(); i++) {
+          stream_out_list_[i]->GetStreamHandle(&stream_out);
+          astream_out = adev_->OutGetStream((audio_stream_t*)stream_out);
+          if (astream_out->isStarted() &&
+              astream_out->GetUseCase() == USECASE_AUDIO_PLAYBACK_VOIP) {
+              return true;
+          }
+     }
+     return false;
+}
+
 int AudioDevice::SetParameters(const char *kvpairs) {
     int ret = 0, val = 0;
     struct str_parms *parms = NULL;
@@ -1458,6 +1473,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
     std::shared_ptr<StreamOutPrimary> astream_out = NULL;
     uint8_t channels = 0;
     std::set<audio_devices_t> new_devices;
+    std::set<audio_devices_t> crs_device;
 
     AHAL_DBG("enter: %s", kvpairs);
     ret = voice_->VoiceSetParameters(kvpairs);
@@ -1606,6 +1622,14 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                 if (ret!=0) {
                     AHAL_ERR("pal set param failed for device connection, pal_device_ids:%d",
                              pal_device_ids[i]);
+                } else {
+                    if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
+                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
+                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE) {
+                        crs_device.clear();
+                        crs_device.insert(device);
+                        voice_->RouteStream(crs_device);
+                    }
                 }
             }
             AHAL_INFO("pal set param success  for device connection");
@@ -1803,6 +1827,17 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                         sizeof(pal_param_device_connection_t));
                 if (ret!=0) {
                     AHAL_ERR("pal set param failed for device disconnect");
+                } else {
+                    if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
+                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
+                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE) {
+                        crs_device.clear();
+                        if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                            crs_device.insert(AUDIO_DEVICE_OUT_SPEAKER);
+                        else
+                            crs_device.insert(AUDIO_DEVICE_OUT_EARPIECE);
+                        voice_->RouteStream(crs_device);
+                    }
                 }
                 AHAL_INFO("pal set param sucess for device disconnect");
             }
@@ -1883,6 +1918,12 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         AHAL_INFO("BTSCO on = %d", param_bt_sco.bt_sco_on);
         ret = pal_set_param(PAL_PARAM_ID_BT_SCO, (void *)&param_bt_sco,
                             sizeof(pal_param_btsco_t));
+
+        if (param_bt_sco.bt_sco_on) {
+            crs_device.clear();
+            crs_device.insert(AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET);
+            voice_->RouteStream(crs_device);
+        }
     }
 
     ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_BT_SCO_WB, value, sizeof(value));
