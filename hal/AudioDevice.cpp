@@ -1924,6 +1924,13 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             crs_device.insert(AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET);
             voice_->RouteStream(crs_device);
         }
+        if (voice_->voice_.crsCall || voice_->voice_.crsVsid) {
+            if (!param_bt_sco.bt_sco_on) {
+                crs_device.clear();
+                crs_device.insert(AUDIO_DEVICE_OUT_SPEAKER);
+                voice_->RouteStream(crs_device);
+            }
+        }
     }
 
     ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_BT_SCO_WB, value, sizeof(value));
