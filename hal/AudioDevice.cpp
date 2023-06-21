@@ -531,7 +531,8 @@ create_patch:
         patch->sinks = sinks;
     }
 
-    if (voice_ && (patch_type == AudioPatch::PATCH_PLAYBACK || patch_type == AudioPatch::PATCH_DEVICE_LOOPBACK))
+    if (voice_ && !voice_->voice_.crsCall &&
+        (patch_type == AudioPatch::PATCH_PLAYBACK || patch_type == AudioPatch::PATCH_DEVICE_LOOPBACK))
         ret = voice_->RouteStream(device_types);
     if (stream)
         ret |= stream->RouteStream(device_types);
