@@ -899,7 +899,8 @@ static int astream_out_get_presentation_position(
        return -EINVAL;
     }
     if (astream_out) {
-       switch (astream_out->GetPalStreamType(astream_out->flags_)) {
+       switch (StreamOutPrimary::GetPalStreamType(astream_out->flags_,
+                                0, false)) {
        case PAL_STREAM_PCM_OFFLOAD:
            if (PAL_CARD_STATUS_DOWN(AudioDevice::sndCardState)) {
                *frames = astream_out->GetFramesWritten(timestamp);
@@ -945,7 +946,8 @@ static int out_get_render_position(const struct audio_stream_out *stream,
         return -EINVAL;
     }
     if (astream_out) {
-        switch (astream_out->GetPalStreamType(astream_out->flags_)) {
+        switch (StreamOutPrimary::GetPalStreamType(astream_out->flags_, 0,
+                          false)) {
         case PAL_STREAM_PCM_OFFLOAD:
             if (PAL_CARD_STATUS_DOWN(AudioDevice::sndCardState)) {
                 frames =  astream_out->GetFramesWritten(NULL);
@@ -1518,7 +1520,7 @@ uint64_t StreamInPrimary::GetFramesRead(int64_t* time)
 
     if (isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_A2DP)) {
         param_bt_a2dp_ptr->dev_id = PAL_DEVICE_IN_BLUETOOTH_A2DP;
-    } else if(isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_BLE)) {
+    } else if (isDeviceAvailable(PAL_DEVICE_IN_BLUETOOTH_BLE)) {
         param_bt_a2dp_ptr->dev_id = PAL_DEVICE_IN_BLUETOOTH_BLE;
     } else {
         goto exit;
@@ -2035,12 +2037,20 @@ pal_stream_type_t StreamInPrimary::GetPalStreamType(
 }
 
 pal_stream_type_t StreamOutPrimary::GetPalStreamType(
-                                    audio_output_flags_t halStreamFlags) {
+                                    audio_output_flags_t halStreamFlags,
+                                    uint32_t sample_rate,
+                                    bool isDeviceAvail) {
     pal_stream_type_t palStreamType = PAL_STREAM_LOW_LATENCY;
     if ((halStreamFlags & AUDIO_OUTPUT_FLAG_VOIP_RX)!=0) {
         palStreamType = PAL_STREAM_VOIP_RX;
         return palStreamType;
     }
+    if ((halStreamFlags & AUDIO_OUTPUT_FLAG_FAST) != 0 &&
+        isDeviceAvail) {
+            palStreamType = PAL_STREAM_PROXY;
+            return palStreamType;
+    }
+
     if ((halStreamFlags & AUDIO_OUTPUT_FLAG_RAW) != 0) {
         palStreamType = PAL_STREAM_ULTRA_LOW_LATENCY;
     } else if ((halStreamFlags & AUDIO_OUTPUT_FLAG_SPATIALIZER) != 0) {
@@ -2775,7 +2785,8 @@ done:
 int64_t StreamOutPrimary::GetRenderLatency(audio_output_flags_t halStreamFlags)
 {
     struct pal_stream_attributes streamAttributes_;
-    streamAttributes_.type = StreamOutPrimary::GetPalStreamType(halStreamFlags);
+    streamAttributes_.type = StreamOutPrimary::GetPalStreamType(halStreamFlags,
+                                0, false);
     AHAL_VERBOSE(" type %d",streamAttributes_.type);
     switch (streamAttributes_.type) {
          case PAL_STREAM_DEEP_BUFFER:
@@ -2809,7 +2820,7 @@ uint64_t StreamOutPrimary::GetFramesWritten(struct timespec *timestamp)
     /* This adjustment accounts for buffering after app processor
      * It is based on estimated DSP latency per use case, rather than exact.
      */
-    dsp_frames = StreamOutPrimary::GetRenderLatency(flags_) *
+    dsp_frames = GetRenderLatency(flags_) *
         (streamAttributes_.out_media_config.sample_rate) / 1000000LL;
 
     written_frames = mBytesWritten / audio_bytes_per_frame(
@@ -2995,7 +3006,8 @@ uint32_t StreamOutPrimary::GetBufferSizeForLowLatency() {
 uint32_t StreamOutPrimary::GetBufferSize() {
     struct pal_stream_attributes streamAttributes_;
 
-    streamAttributes_.type = StreamOutPrimary::GetPalStreamType(flags_);
+    streamAttributes_.type = StreamOutPrimary::GetPalStreamType(flags_,
+                                              config_.sample_rate, false);
     AHAL_DBG("type %d", streamAttributes_.type);
     if (streamAttributes_.type == PAL_STREAM_VOIP_RX) {
         return (DEFAULT_VOIP_BUF_DURATION_MS * config_.sample_rate / 1000) *
@@ -3069,7 +3081,9 @@ int StreamOutPrimary::Open() {
     if (ch_info.channels > 1)
         ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
 
-    streamAttributes_.type = StreamOutPrimary::GetPalStreamType(flags_);
+    streamAttributes_.type = StreamOutPrimary::GetPalStreamType(flags_,
+                                    config_.sample_rate,
+                    isDeviceAvailable(PAL_DEVICE_OUT_PROXY));
     streamAttributes_.flags = (pal_stream_flags_t)0;
     streamAttributes_.direction = PAL_AUDIO_OUTPUT;
     streamAttributes_.out_media_config.sample_rate = config_.sample_rate;
@@ -3135,6 +3149,12 @@ int StreamOutPrimary::Open() {
         case PAL_STREAM_VOICE_CALL_MUSIC:
             streamAttributes_.info.incall_music_info.local_playback = adevice->icmd_playback;
             break;
+        case PAL_STREAM_PROXY:
+            if (isDeviceAvailable(PAL_DEVICE_OUT_PROXY)) {
+                streamAttributes_.info.opt_stream_info.rx_proxy_type = PAL_STREAM_PROXY_RX_WFD;
+            }
+            break;
+
         default:
             break;
     }

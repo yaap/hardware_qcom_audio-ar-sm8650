@@ -557,7 +557,9 @@ public:
     uint32_t GetBufferSize();
     uint32_t GetBufferSizeForLowLatency();
     int GetFrames(uint64_t *frames);
-    static pal_stream_type_t GetPalStreamType(audio_output_flags_t halStreamFlags);
+    static pal_stream_type_t GetPalStreamType(audio_output_flags_t halStreamFlags,
+                                    uint32_t sample_rate,
+                                    bool isDeviceAvail);
     static int64_t GetRenderLatency(audio_output_flags_t halStreamFlags);
     int GetOutputUseCase(audio_output_flags_t halStreamFlags);
     int StartOffloadEffects(audio_io_handle_t, pal_stream_handle_t*);
