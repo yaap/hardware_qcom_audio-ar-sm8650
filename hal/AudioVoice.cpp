@@ -84,18 +84,16 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
 }
 
 void AudioVoice::MapCrsVolume(int CrsVolumeIndex) {
-     if (CrsVolumeIndex == 1 ||
-         CrsVolumeIndex == 2 ||
-         CrsVolumeIndex == 3)
+     if (CrsVolumeIndex > 0 && CrsVolumeIndex < 4)
         voice_.crsVol = 0.2;
      else if (CrsVolumeIndex == 4)
-       voice_.crsVol = 0.4;
+       voice_.crsVol = 0.3;
      else if (CrsVolumeIndex == 5)
-        voice_.crsVol = 0.6;
+        voice_.crsVol = 0.4;
      else if (CrsVolumeIndex == 6)
-       voice_.crsVol = 0.8;
+       voice_.crsVol = 0.5;
      else if (CrsVolumeIndex >= 7)
-       voice_.crsVol = 1.0;
+       voice_.crsVol = 0.6;
      else
        voice_.crsVol = 0.0;
      AHAL_DBG("Crs volume is: %f", voice_.crsVol);
@@ -528,6 +526,12 @@ int AudioVoice::RouteStream(const std::set<audio_devices_t>& rx_devices) {
         memset(pal_device_ids, 0, device_count * sizeof(pal_device_id_t));
         stream_out_primary_->getPalDeviceIds(tx_devices, pal_device_ids);
         pal_tx_device = pal_device_ids[0];
+    }
+
+    if (voice_.crsCall &&
+        (pal_voice_rx_device_id_ == pal_rx_device)) {
+        AHAL_DBG("same Rx device in crs call");
+        goto exit;
     }
 
     pal_voice_rx_device_id_ = pal_rx_device;
@@ -1204,6 +1208,14 @@ int AudioVoice::VoiceSetDevice(voice_session_t *session) {
     out_ch_info.channels = 2;
     out_ch_info.ch_map[0] = PAL_CHMAP_CHANNEL_FL;
     out_ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
+
+    if (voice_.crsCall) {
+        if (voice_.crsLoopback && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET) {
+            AHAL_DBG("CRS force handset to speaker");
+            pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
+            pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
+        }
+    }
 
     if (session->pal_voice_loopback_handle) {
         AHAL_DBG("CRS teardown for device switch");
