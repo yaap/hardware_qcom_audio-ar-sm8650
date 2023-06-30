@@ -2120,7 +2120,6 @@ int StreamOutPrimary::GetMmapPosition(struct audio_mmap_position *position)
     struct pal_mmap_position pal_mmap_pos;
     int32_t ret = 0;
 
-    stream_mutex_.lock();
     if (pal_stream_handle_ == nullptr) {
         AHAL_ERR("error pal handle is null\n");
         stream_mutex_.unlock();
@@ -2145,7 +2144,6 @@ int StreamOutPrimary::GetMmapPosition(struct audio_mmap_position *position)
     position->time_nanoseconds += mmap_time_offset_micros * (int64_t)1000;
 #endif
 
-    stream_mutex_.unlock();
     return 0;
 }
 
@@ -3195,6 +3193,28 @@ int StreamOutPrimary::Open() {
             ret = -EINVAL;
             goto error_open;
         }
+    }
+
+    /* For MMAP playback usecase, audio framework updates track metadata to AHAL after
+     * CreateMmapBuffer(). In case of MMAP playback on BT, device starts well before
+     * track metadata updated to BT stack. Due to this, it requires unnecessary
+     * reconfig to change existing BT config to gaming config params. Thus to avoid
+     * extra reconfig event, HAL updates metadata to BT stack before MMAP stream opens.
+     */
+    if (usecase_ == USECASE_AUDIO_PLAYBACK_MMAP) {
+        audio_stream_out* stream_out;
+        GetStreamHandle(&stream_out);
+        ssize_t track_count = 1;
+        std::vector<playback_track_metadata_v7_t> Sourcetracks;
+        Sourcetracks.resize(track_count);
+        struct source_metadata_v7 source_metadata;
+
+        source_metadata.track_count = track_count;
+        source_metadata.tracks = Sourcetracks.data();
+        source_metadata.tracks->base.usage = AUDIO_USAGE_GAME;
+        source_metadata.tracks->base.content_type = AUDIO_CONTENT_TYPE_MUSIC;
+
+        out_update_source_metadata_v7(stream_out, &source_metadata);
     }
 
     ret = pal_stream_open(&streamAttributes_,
