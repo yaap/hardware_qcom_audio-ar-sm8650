@@ -131,6 +131,7 @@ PRODUCT_PACKAGES += fai__3.0.0_0.0__eai_3.4_enpuv4.pmd
 # Audio configuration xml's related to Lanai
 QCV_FAMILY_SKUS := pineapple
 DEVICE_SKU := pineapple
+UV_WRAPPER2 := true
 
 CONFIG_PAL_SRC_DIR := vendor/qcom/opensource/pal/configs/pineapple
 CONFIG_HAL_SRC_DIR := vendor/qcom/opensource/audio-hal/primary-hal/configs/pineapple
