@@ -431,15 +431,16 @@ void audio_extn_sound_trigger_get_parameters(std::shared_ptr<AudioDevice> adev _
     char *str = value;
     size_t payload_sz = 0;
     size_t offset = strlen(VUI_PARAMETER_GET_META_DATA) + 1;
+    char *query_str = nullptr;
 
     if (!query || !reply) {
         AHAL_ERR("null query/reply");
         return;
     }
 
-    if (strstr(str_parms_to_str(query), VUI_PARAMETER_GET_META_DATA)) {
-        strlcpy(value, str_parms_to_str(query) + offset,
-            strlen(str_parms_to_str(query)) - offset + 1);
+    query_str = str_parms_to_str(query);
+    if (query_str && strstr(query_str, VUI_PARAMETER_GET_META_DATA)) {
+        strlcpy(value, query_str + offset, strlen(query_str) - offset + 1);
         status = pal_get_param(PAL_PARAM_ID_VUI_GET_META_DATA, (void **)&str, &payload_sz, nullptr);
         if (!status) {
             str_parms_add_str(reply, VUI_PARAMETER_GET_META_DATA, value);
