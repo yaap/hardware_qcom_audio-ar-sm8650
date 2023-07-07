@@ -531,7 +531,8 @@ create_patch:
         patch->sinks = sinks;
     }
 
-    if (voice_ && (patch_type == AudioPatch::PATCH_PLAYBACK || patch_type == AudioPatch::PATCH_DEVICE_LOOPBACK))
+    if (voice_ && !voice_->voice_.crsCall &&
+        (patch_type == AudioPatch::PATCH_PLAYBACK || patch_type == AudioPatch::PATCH_DEVICE_LOOPBACK))
         ret = voice_->RouteStream(device_types);
     if (stream)
         ret |= stream->RouteStream(device_types);
@@ -1922,6 +1923,10 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         if (param_bt_sco.bt_sco_on) {
             crs_device.clear();
             crs_device.insert(AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET);
+            voice_->RouteStream(crs_device);
+        } else {
+            crs_device.clear();
+            crs_device.insert(AUDIO_DEVICE_OUT_SPEAKER);
             voice_->RouteStream(crs_device);
         }
     }

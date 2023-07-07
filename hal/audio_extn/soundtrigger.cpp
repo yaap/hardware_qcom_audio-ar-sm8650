@@ -398,6 +398,7 @@ void audio_extn_sound_trigger_set_parameters(std::shared_ptr<AudioDevice> adev _
 {
     int status = 0;
     char value[1024] = {0};
+    char *str = value;
     size_t payload_sz = 0;
     pal_stream_handle_t *handle = nullptr;
 
@@ -415,8 +416,8 @@ void audio_extn_sound_trigger_set_parameters(std::shared_ptr<AudioDevice> adev _
     if (status >= 0) {
         pal_vui_handle = nullptr;
         payload_sz = sizeof(value);
-        status = pal_get_param(PAL_PARAM_ID_VUI_CAPTURE_META_DATA, (void **)&value, &payload_sz, nullptr);
-        if (!status) {
+        status = pal_get_param(PAL_PARAM_ID_VUI_CAPTURE_META_DATA, (void **)&str, &payload_sz, nullptr);
+        if (!status && payload_sz) {
             pal_vui_handle = (pal_stream_handle_t *)*((uint64_t *)value);
         }
     }
@@ -427,17 +428,19 @@ void audio_extn_sound_trigger_get_parameters(std::shared_ptr<AudioDevice> adev _
 {
     int status = 0;
     char value[1024] = {0};
+    char *str = value;
     size_t payload_sz = 0;
+    size_t offset = strlen(VUI_PARAMETER_GET_META_DATA) + 1;
 
     if (!query || !reply) {
         AHAL_ERR("null query/reply");
         return;
     }
 
-    status = str_parms_get_str(query, VUI_PARAMETER_GET_META_DATA, value, sizeof(value));
-    if (status >= 0) {
-        payload_sz = sizeof(value);
-        status = pal_get_param(PAL_PARAM_ID_VUI_GET_META_DATA, (void **)&value, &payload_sz, nullptr);
+    if (strstr(str_parms_to_str(query), VUI_PARAMETER_GET_META_DATA)) {
+        strlcpy(value, str_parms_to_str(query) + offset,
+            strlen(str_parms_to_str(query)) - offset + 1);
+        status = pal_get_param(PAL_PARAM_ID_VUI_GET_META_DATA, (void **)&str, &payload_sz, nullptr);
         if (!status) {
             str_parms_add_str(reply, VUI_PARAMETER_GET_META_DATA, value);
         }

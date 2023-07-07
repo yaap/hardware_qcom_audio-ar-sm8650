@@ -1185,9 +1185,10 @@ static void out_update_source_metadata_v7(
              * framework will send metadata update when ringtone stream ends.
              * As only media/gaming stream is present at that point, it will
              * trigger reconfiguration in BT stack. To avoid this, block all
-             * framework triggered metadata update if phone mode is in CALL.
+             * framework triggered metadata update if call is active or phone
+             * mode is IN_CALL.
              */
-            if (mode == AUDIO_MODE_IN_CALL)
+            if (voice_active || (mode == AUDIO_MODE_IN_CALL))
                 voice_mode_active = true;
         } else {
             AHAL_ERR("adevice voice is null");
@@ -1625,8 +1626,10 @@ static void in_update_sink_metadata_v7(
 
             if (adevice && adevice->voice_) {
                 voice_active = adevice->voice_->get_voice_call_state(&mode);
-                // Flag to block framework triggered metadata update to BT if phone mode IN_CALL
-                if (mode == AUDIO_MODE_IN_CALL)
+                /* Flag to block framework triggered metadata update to BT if call is active or
+                 * phone mode is IN_CALL.
+                 */
+                if (voice_active || (mode == AUDIO_MODE_IN_CALL))
                     voice_mode_active = true;
             }
             else {
@@ -2117,7 +2120,6 @@ int StreamOutPrimary::GetMmapPosition(struct audio_mmap_position *position)
     struct pal_mmap_position pal_mmap_pos;
     int32_t ret = 0;
 
-    stream_mutex_.lock();
     if (pal_stream_handle_ == nullptr) {
         AHAL_ERR("error pal handle is null\n");
         stream_mutex_.unlock();
@@ -2142,7 +2144,6 @@ int StreamOutPrimary::GetMmapPosition(struct audio_mmap_position *position)
     position->time_nanoseconds += mmap_time_offset_micros * (int64_t)1000;
 #endif
 
-    stream_mutex_.unlock();
     return 0;
 }
 
@@ -3194,6 +3195,28 @@ int StreamOutPrimary::Open() {
         }
     }
 
+    /* For MMAP playback usecase, audio framework updates track metadata to AHAL after
+     * CreateMmapBuffer(). In case of MMAP playback on BT, device starts well before
+     * track metadata updated to BT stack. Due to this, it requires unnecessary
+     * reconfig to change existing BT config to gaming config params. Thus to avoid
+     * extra reconfig event, HAL updates metadata to BT stack before MMAP stream opens.
+     */
+    if (usecase_ == USECASE_AUDIO_PLAYBACK_MMAP) {
+        audio_stream_out* stream_out;
+        GetStreamHandle(&stream_out);
+        ssize_t track_count = 1;
+        std::vector<playback_track_metadata_v7_t> Sourcetracks;
+        Sourcetracks.resize(track_count);
+        struct source_metadata_v7 source_metadata;
+
+        source_metadata.track_count = track_count;
+        source_metadata.tracks = Sourcetracks.data();
+        source_metadata.tracks->base.usage = AUDIO_USAGE_GAME;
+        source_metadata.tracks->base.content_type = AUDIO_CONTENT_TYPE_MUSIC;
+
+        out_update_source_metadata_v7(stream_out, &source_metadata);
+    }
+
     ret = pal_stream_open(&streamAttributes_,
                           mAndroidOutDevices.size(),
                           mPalOutDevice,
@@ -3208,6 +3231,16 @@ int StreamOutPrimary::Open() {
         ret = -EINVAL;
         goto error_open;
     }
+
+    /* set cached volume if any, dont return failure back up */
+    if (volume_) {
+        AHAL_DBG("set cached volume (%f)", volume_->volume_pair[0].vol);
+        ret = pal_stream_set_volume(pal_stream_handle_, volume_);
+        if (ret) {
+            AHAL_ERR("Pal Stream volume Error (%x)", ret);
+        }
+    }
+
     if (usecase_ == USECASE_AUDIO_PLAYBACK_WITH_HAPTICS) {
         ch_info.channels = audio_channel_count_from_out_mask(config_.channel_mask & AUDIO_CHANNEL_HAPTIC_ALL);
         ch_info.ch_map[0] = PAL_CHMAP_CHANNEL_FL;
@@ -3548,13 +3581,6 @@ ssize_t StreamOutPrimary::configurePalOutputStream() {
 
     if (!stream_started_) {
         AutoPerfLock perfLock;
-        /* set cached volume if any, dont return failure back up */
-        if (volume_) {
-            ret = pal_stream_set_volume(pal_stream_handle_, volume_);
-            if (ret) {
-                AHAL_ERR("Pal Stream volume Error (%x)", ret);
-            }
-        }
 
         ATRACE_BEGIN("hal: pal_stream_start");
         ret = pal_stream_start(pal_stream_handle_);
