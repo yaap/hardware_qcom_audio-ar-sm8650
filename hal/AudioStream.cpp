@@ -704,10 +704,12 @@ static int astream_set_latency_mode(struct audio_stream_out *stream, audio_laten
 
     if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
         param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
+    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
     } else {
-        /* We do not set the latency mode for non-A2DP streams.
-         * Return SUCCESS to avoid any error logs in fwk
-         */
+        ret = -EINVAL;
         goto exit;
     }
     param_latency_mode_ptr->num_modes = 1;
@@ -749,10 +751,12 @@ static int astream_get_recommended_latency_modes(struct audio_stream_out *stream
     param_latency_mode_ptr->num_modes = PAL_MAX_LATENCY_MODES; // initialize with max size of modes supported
     if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
         param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
+    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
+        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
     } else {
-        /* Only support FREE Latency Mode for Non-A2DP streams */
-        modes[0] = AUDIO_LATENCY_MODE_FREE;
-        *num_modes = 1;
+        ret = -EINVAL;
         goto exit;
     }
     ret = pal_get_param(PAL_PARAM_ID_LATENCY_MODE, (void **)&param_latency_mode_ptr, &size, nullptr);
@@ -787,7 +791,7 @@ static int astream_set_latency_mode_callback(struct audio_stream_out *stream,
     std::ignore = stream;
     std::ignore = callback;
     std::ignore = cookie;
-    return 0; /* return SUCCESS to unblock framework from calling get supported latency mode */
+    return -ENOSYS;
 }
 #endif
 
