@@ -687,6 +687,13 @@ static int astream_set_latency_mode(struct audio_stream_out *stream, audio_laten
     pal_param_latency_mode_t *param_latency_mode_ptr = NULL;
     int ret = 0;
 
+    // check if mode value is in allowed range
+    if (mode < AUDIO_LATENCY_MODE_FREE || mode > AUDIO_LATENCY_MODE_DYNAMIC_SPATIAL_AUDIO_HARDWARE) {
+       AHAL_ERR("invalid mode value %d", mode);
+       ret = -EINVAL;
+       goto exit;
+    }
+
     if (adevice) {
         astream_out = adevice->OutGetStream((audio_stream_t*)stream);
     } else {
@@ -704,12 +711,9 @@ static int astream_set_latency_mode(struct audio_stream_out *stream, audio_laten
 
     if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
         param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
-    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
-        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
-    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
-        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
     } else {
-        ret = -EINVAL;
+        /* We only support A2DP devices, return error for other devices. */
+        ret = -ENOSYS;
         goto exit;
     }
     param_latency_mode_ptr->num_modes = 1;
@@ -751,12 +755,9 @@ static int astream_get_recommended_latency_modes(struct audio_stream_out *stream
     param_latency_mode_ptr->num_modes = PAL_MAX_LATENCY_MODES; // initialize with max size of modes supported
     if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
         param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
-    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
-        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
-    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
-        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
     } else {
-        ret = -EINVAL;
+        /* We only support A2DP devices, return error for other devices. */
+        ret = -ENOSYS;
         goto exit;
     }
     ret = pal_get_param(PAL_PARAM_ID_LATENCY_MODE, (void **)&param_latency_mode_ptr, &size, nullptr);
@@ -791,7 +792,7 @@ static int astream_set_latency_mode_callback(struct audio_stream_out *stream,
     std::ignore = stream;
     std::ignore = callback;
     std::ignore = cookie;
-    return -ENOSYS;
+    return 0; /* return success to unblock framework from calling get supported latency mode */
 }
 #endif
 
