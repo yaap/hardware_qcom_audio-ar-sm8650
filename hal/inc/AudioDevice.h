@@ -166,6 +166,7 @@ public:
     std::shared_ptr<StreamInPrimary> InGetStream(audio_io_handle_t handle);
     std::shared_ptr<StreamInPrimary> InGetStream(audio_stream_t* stream_in);
     std::shared_ptr<AudioVoice> voice_;
+    std::set<audio_devices_t> crs_device;
     int SetMicMute(bool state);
     bool mute_;
     int GetMicMute(bool *state);
