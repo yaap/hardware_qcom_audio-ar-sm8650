@@ -724,12 +724,15 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
                     // dont start the call, if suspend is in progress for BLE
                     std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
 
-                    ret = VoiceStart(session);
-                    if (ret < 0) {
-                        AHAL_ERR("VoiceStart() failed");
-                    }
-                    else {
-                        session->state.current_ = session->state.new_;
+                    if (!IsAnyCallActive()) {
+                        ret = VoiceStart(session);
+                        if (ret < 0) {
+                            AHAL_ERR("VoiceStart() failed");
+                        } else {
+                            session->state.current_ = session->state.new_;
+                        }
+                    } else {
+                         AHAL_INFO("Voice already started");
                     }
                 }
                 break;
