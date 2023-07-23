@@ -1626,7 +1626,8 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                 } else {
                     if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
                         pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE) {
+                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE ||
+                        pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
                         if (crs_device.size() == 0) {
                            crs_device.insert(device);
                            voice_->RouteStream({device});
@@ -1840,7 +1841,8 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                 } else {
                     if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
                         pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE) {
+                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE ||
+                        pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
                         pos = std::find(crs_device.begin(), crs_device.end(), device);
                         if (pos != crs_device.end()) {
                             crs_device.erase(pos);
