@@ -3047,6 +3047,8 @@ int StreamOutPrimary::Open() {
 
     pal_param_bta2dp_t *param_bt_a2dp_ptr = nullptr;
     size_t bt_param_size = 0;
+    ssize_t track_count_total = 0;
+    std::vector<std::shared_ptr<StreamOutPrimary>> astream_out_list;
 
     AHAL_INFO("Enter: OutPrimary usecase(%d: %s)", GetUseCase(), use_case_table[GetUseCase()]);
 
@@ -3209,8 +3211,17 @@ int StreamOutPrimary::Open() {
      * track metadata updated to BT stack. Due to this, it requires unnecessary
      * reconfig to change existing BT config to gaming config params. Thus to avoid
      * extra reconfig event, HAL updates metadata to BT stack before MMAP stream opens.
+     * If there is any active track present before MMAP usecase, do not udpate metadata
+     * from AHAL, since reconfig to gaming params is required from BT and also to avoid any
+     * inconsistency with MMAP track metadata.
      */
-    if (usecase_ == USECASE_AUDIO_PLAYBACK_MMAP) {
+
+     astream_out_list = adevice->OutGetBLEStreamOutputs();
+     for (int i = 0; i < astream_out_list.size(); i++) {
+         //total tracks on stream o/ps
+         track_count_total += astream_out_list[i]->btSourceMetadata.track_count;
+     }
+    if (usecase_ == USECASE_AUDIO_PLAYBACK_MMAP && track_count_total == 0) {
         audio_stream_out* stream_out;
         GetStreamHandle(&stream_out);
         ssize_t track_count = 1;
