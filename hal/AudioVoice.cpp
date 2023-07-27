@@ -730,6 +730,7 @@ int AudioVoice::UpdateCalls(voice_session_t *pSession) {
                         if (ret < 0) {
                             AHAL_ERR("VoiceStart() failed");
                         } else {
+                            voice_.in_call = true;
                             session->state.current_ = session->state.new_;
                         }
                     } else {
