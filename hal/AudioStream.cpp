@@ -687,6 +687,13 @@ static int astream_set_latency_mode(struct audio_stream_out *stream, audio_laten
     pal_param_latency_mode_t *param_latency_mode_ptr = NULL;
     int ret = 0;
 
+    // check if mode value is in allowed range
+    if (mode < AUDIO_LATENCY_MODE_FREE || mode > AUDIO_LATENCY_MODE_DYNAMIC_SPATIAL_AUDIO_HARDWARE) {
+       AHAL_ERR("invalid mode value %d", mode);
+       ret = -EINVAL;
+       goto exit;
+    }
+
     if (adevice) {
         astream_out = adevice->OutGetStream((audio_stream_t*)stream);
     } else {
@@ -704,12 +711,9 @@ static int astream_set_latency_mode(struct audio_stream_out *stream, audio_laten
 
     if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
         param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
-    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
-        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
-    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
-        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
     } else {
-        ret = -EINVAL;
+        /* We only support A2DP devices, return error for other devices. */
+        ret = -ENOSYS;
         goto exit;
     }
     param_latency_mode_ptr->num_modes = 1;
@@ -751,12 +755,9 @@ static int astream_get_recommended_latency_modes(struct audio_stream_out *stream
     param_latency_mode_ptr->num_modes = PAL_MAX_LATENCY_MODES; // initialize with max size of modes supported
     if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_A2DP)) {
         param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
-    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE)) {
-        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE;
-    } else if (astream_out->isDeviceAvailable(PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST)) {
-        param_latency_mode_ptr->dev_id = PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST;
     } else {
-        ret = -EINVAL;
+        /* We only support A2DP devices, return error for other devices. */
+        ret = -ENOSYS;
         goto exit;
     }
     ret = pal_get_param(PAL_PARAM_ID_LATENCY_MODE, (void **)&param_latency_mode_ptr, &size, nullptr);
@@ -791,7 +792,7 @@ static int astream_set_latency_mode_callback(struct audio_stream_out *stream,
     std::ignore = stream;
     std::ignore = callback;
     std::ignore = cookie;
-    return -ENOSYS;
+    return 0; /* return success to unblock framework from calling get supported latency mode */
 }
 #endif
 
@@ -3095,6 +3096,10 @@ int StreamOutPrimary::Open() {
                     streamAttributes_.out_media_config.bit_width = 16;
                 streamAttributes_.type = PAL_STREAM_PCM_OFFLOAD;
             } else {
+                if (getFormatId.find(config_.format & AUDIO_FORMAT_MAIN_MASK) == getFormatId.end()) {
+                    AHAL_ERR("Invalid format: %d", config_.format);
+                    goto error_open;
+                }
                 streamAttributes_.out_media_config.aud_fmt_id = getFormatId.at(config_.format & AUDIO_FORMAT_MAIN_MASK);
             }
             break;
@@ -3105,6 +3110,10 @@ int StreamOutPrimary::Open() {
         case PAL_STREAM_GENERIC:
         case PAL_STREAM_PCM_OFFLOAD:
             halInputFormat = config_.format;
+            if (getAlsaSupportedFmt.find(halInputFormat) == getAlsaSupportedFmt.end()) {
+                AHAL_ERR("Invalid format: %d", config_.format);
+                goto error_open;
+            }
             halOutputFormat = (audio_format_t)(getAlsaSupportedFmt.at(halInputFormat));
             streamAttributes_.out_media_config.aud_fmt_id = getFormatId.at(halOutputFormat);
             streamAttributes_.out_media_config.bit_width = format_to_bitwidth_table[halOutputFormat];
@@ -3420,9 +3429,8 @@ int StreamOutPrimary::GetFrames(uint64_t *frames)
     AHAL_VERBOSE("session msw %u", tstamp.session_time.value_msw);
     AHAL_VERBOSE("session lsw %u", tstamp.session_time.value_lsw);
     AHAL_VERBOSE("session timespec %lld", ((long long) timestamp));
-    timestamp *= (streamAttributes_.out_media_config.sample_rate);
-    AHAL_VERBOSE("timestamp %lld", ((long long) timestamp));
-    dsp_frames = timestamp/1000000;
+    dsp_frames = timestamp / 1000
+                 * streamAttributes_.out_media_config.sample_rate / 1000;
 
     // Adjustment accounts for A2dp encoder latency with offload usecases
     // Note: Encoder latency is returned in ms.
@@ -4951,7 +4959,18 @@ int StreamInPrimary::Open() {
        streamAttributes_.in_media_config.aud_fmt_id = getFormatId.at(config_.format);
        streamAttributes_.in_media_config.bit_width = format_to_bitwidth_table[config_.format];
     } else if (!is_pcm_format(config_.format) && usecase_ == USECASE_AUDIO_RECORD_COMPRESS) {
+        if (getFormatId.find(config_.format) == getFormatId.end()) {
+            AHAL_ERR("Invalid format: %d", config_.format);
+            ret = -EINVAL;
+            goto exit;
+        }
         streamAttributes_.in_media_config.aud_fmt_id = getFormatId.at(config_.format);
+        if (compressRecordBitWidthTable.find(config_.format) ==
+            compressRecordBitWidthTable.end()){
+            AHAL_ERR("Invalid format: %d", config_.format);
+            ret = -EINVAL;
+            goto exit;
+        }
         streamAttributes_.in_media_config.bit_width =
                                                 compressRecordBitWidthTable.at(config_.format);
     } else {

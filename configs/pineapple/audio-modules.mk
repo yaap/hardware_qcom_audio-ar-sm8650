@@ -111,6 +111,7 @@ AUDIO_MODULES += libfmpal
 AUDIO_MODULES += event.eai
 AUDIO_MODULES += music.eai
 AUDIO_MODULES += speech.eai
+AUDIO_MODULES += environment.eai
 AUDIO_MODULES += libqtigefar
 AUDIO_MODULES += audiodsd2pcmtest
 AUDIO_MODULES += mm-audio-ftm
