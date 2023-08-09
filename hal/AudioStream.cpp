@@ -3636,6 +3636,17 @@ ssize_t StreamOutPrimary::configurePalOutputStream() {
             ret = StartOffloadEffects(handle_, pal_stream_handle_);
             ret = StartOffloadVisualizer(handle_, pal_stream_handle_);
         }
+        auto isDefaultPlaybackRate = [&]() {
+            return (mPlaybackRate.mSpeed == AUDIO_TIMESTRETCH_SPEED_NORMAL &&
+                    mPlaybackRate.mSpeed == AUDIO_TIMESTRETCH_PITCH_NORMAL &&
+                    mPlaybackRate.mStretchMode == AUDIO_TIMESTRETCH_STRETCH_DEFAULT &&
+                    mPlaybackRate.mFallbackMode == AUDIO_TIMESTRETCH_FALLBACK_FAIL);
+        };
+
+        if (isOffloadUsecase() && !isDefaultPlaybackRate()) {
+            AHAL_DBG("using playspeed %f", mPlaybackRate.mSpeed);
+            setPlaybackRateToPal(&mPlaybackRate);
+        }
         ATRACE_END();
     }
     if ((streamAttributes_.type == PAL_STREAM_COMPRESSED) && isCompressMetadataAvail) {
@@ -4023,8 +4034,8 @@ int StreamOutPrimary::setPlaybackRateParameters(const audio_playback_rate_t *pla
 int StreamOutPrimary::setPlaybackRateToPal(const audio_playback_rate_t *playbackRate) {
 
     if (!pal_stream_handle_) {
-        AHAL_DBG("stream inactive, can't set playback rate");
-        return -ENOSYS;
+        AHAL_DBG("stream inactive");
+        return 0;
     }
     pal_param_payload *palParamPayload = (pal_param_payload *) calloc (1,
                                             sizeof(pal_param_payload) +
