@@ -52,6 +52,15 @@
 #include "PalDefs.h"
 
 #define MAX_PERF_LOCK_OPTS 20
+/* LC3_SWB_CODEC_CONFIG_INDEX to select config params
+ * from codec_specific_config table such as as
+ * SR:32000, Frame_duration:7500,
+ * max octets per frame:60, bit_depth:24
+ */
+#define LC3_SWB_CODEC_CONFIG_INDEX 4
+#define LC3_BROADCAST_TRANSIT_MODE 1
+#define LC3_HFP_TRANSIT_MODE 3
+
 
 /* HDR Audio use case parameters */
 #define AUDIO_PARAMETER_KEY_HDR "hdr_record_on"
