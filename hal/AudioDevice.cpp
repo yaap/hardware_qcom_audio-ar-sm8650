@@ -2144,7 +2144,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             adev_->icmd_playback  = false;
     }
 
-    ret = str_parms_get_str(parms, "LEASuspended", value, sizeof(value));
+    ret = str_parms_get_str(parms, "LeAudioSuspended", value, sizeof(value));
     if (ret >= 0) {
         pal_param_bta2dp_t param_bt_a2dp;
         param_bt_a2dp.is_suspend_setparam = true;
