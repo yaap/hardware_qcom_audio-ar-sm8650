@@ -2016,6 +2016,43 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         AHAL_INFO("BTSCO LC3 mode = %d", bt_lc3_speech_enabled);
     }
 
+    ret = str_parms_get_str(parms, "bt_ble_swb", value, sizeof(value));
+    if (ret >= 0) {
+        pal_param_btsco_t param_bt_sco_swb = {};
+        if (strcmp(value, AUDIO_PARAMETER_VALUE_ON) == 0) {
+
+            // turn off wideband, super-wideband
+            param_bt_sco_swb.bt_wb_speech_enabled = false;
+            ret = pal_set_param(PAL_PARAM_ID_BT_SCO_WB, (void*)&param_bt_sco_swb,
+                sizeof(pal_param_btsco_t));
+
+            param_bt_sco_swb.bt_swb_speech_mode = 0xFFFF;
+            ret = pal_set_param(PAL_PARAM_ID_BT_SCO_SWB, (void*)&param_bt_sco_swb,
+                sizeof(pal_param_btsco_t));
+
+            char streamMap[PAL_LC3_MAX_STRING_LEN] = "(0, 0, M, 0, 1, M)";
+            char vendor[PAL_LC3_MAX_STRING_LEN] = "00,00,00,00,00,00,00,00,00,02,00,00,00,0A,00,00";
+            param_bt_sco_swb.bt_lc3_speech_enabled  = true;
+            param_bt_sco_swb.lc3_cfg.num_blocks     = 1;
+            param_bt_sco_swb.lc3_cfg.rxconfig_index = LC3_SWB_CODEC_CONFIG_INDEX;
+            param_bt_sco_swb.lc3_cfg.txconfig_index = LC3_SWB_CODEC_CONFIG_INDEX;
+            param_bt_sco_swb.lc3_cfg.api_version    = 21;
+            param_bt_sco_swb.lc3_cfg.mode           = LC3_HFP_TRANSIT_MODE;
+            strlcpy(param_bt_sco_swb.lc3_cfg.streamMap, streamMap, PAL_LC3_MAX_STRING_LEN);
+            strlcpy(param_bt_sco_swb.lc3_cfg.vendor, vendor, PAL_LC3_MAX_STRING_LEN);
+
+            AHAL_INFO("BTSCO LC3 SWB mode = on, sending..");
+            ret = pal_set_param(PAL_PARAM_ID_BT_SCO_LC3, (void*)&param_bt_sco_swb,
+                sizeof(pal_param_btsco_t));
+        } else {
+            param_bt_sco_swb.bt_lc3_speech_enabled = false;
+
+            AHAL_INFO("BTSCO LC3 SWB mode = off, sending..");
+            ret = pal_set_param(PAL_PARAM_ID_BT_SCO_LC3, (void*)&param_bt_sco_swb,
+                sizeof(pal_param_btsco_t));
+        }
+    }
+
     ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_BT_NREC, value, sizeof(value));
     if (ret >= 0) {
         pal_param_btsco_t param_bt_sco = {};
@@ -2070,6 +2107,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         param_bt_sco.lc3_cfg.rxconfig_index = btsco_lc3_cfg.rxconfig_index;
         param_bt_sco.lc3_cfg.txconfig_index = btsco_lc3_cfg.txconfig_index;
         param_bt_sco.lc3_cfg.api_version    = btsco_lc3_cfg.api_version;
+        param_bt_sco.lc3_cfg.mode           = LC3_BROADCAST_TRANSIT_MODE;
         strlcpy(param_bt_sco.lc3_cfg.streamMap, btsco_lc3_cfg.streamMap, PAL_LC3_MAX_STRING_LEN);
         strlcpy(param_bt_sco.lc3_cfg.vendor, btsco_lc3_cfg.vendor, PAL_LC3_MAX_STRING_LEN);
 
@@ -2144,7 +2182,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             adev_->icmd_playback  = false;
     }
 
-    ret = str_parms_get_str(parms, "LEASuspended", value, sizeof(value));
+    ret = str_parms_get_str(parms, "LeAudioSuspended", value, sizeof(value));
     if (ret >= 0) {
         pal_param_bta2dp_t param_bt_a2dp;
         param_bt_a2dp.is_suspend_setparam = true;
