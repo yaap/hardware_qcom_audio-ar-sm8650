@@ -66,16 +66,15 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
             if ((voice_.in_call && mode == AUDIO_MODE_NORMAL) ||
                 (mode_ == AUDIO_MODE_IN_CALL && voice_.crsCall))
                 ret = StopCall();
-            else if (mode ==  AUDIO_MODE_CALL_SCREEN || !voice_.crsCall) {
-                if (mode_ == AUDIO_MODE_RINGTONE && voice_.crsVsid != 0) {
-                    voice_.in_call = true;
+            else if (mode ==  AUDIO_MODE_CALL_SCREEN)
+                UpdateCalls(voice_.session);
+            else if (mode == AUDIO_MODE_RINGTONE) {
+                if (voice_.crsVsid != 0) {
                     voice_.crsCall = true;
                     //check CRS concurrent case happen
-                    if (adevice->getCrsConcurrentState()) {
+                    if (adevice->getCrsConcurrentState())
                         voice_.crsLoopback = false;
-                    }
                 }
-                UpdateCalls(voice_.session);
             }
         }
     }
