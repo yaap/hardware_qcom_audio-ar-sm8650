@@ -1626,17 +1626,20 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                 } else {
                     if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
                         pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE) {
+                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE ||
+                        pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
                         if (crs_device.size() == 0) {
                            crs_device.insert(device);
-                           voice_->RouteStream({device});
+                           if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                               voice_->RouteStream({device});
                         } else {
                            pos = std::find(crs_device.begin(), crs_device.end(), device);
                            if (pos != crs_device.end()) {
                                AHAL_INFO("same device has added");
                            } else {
                                crs_device.insert(device);
-                               voice_->RouteStream({device});
+                               if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                                   voice_->RouteStream({device});
                            }
                         }
                     }
@@ -1840,20 +1843,20 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                 } else {
                     if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
                         pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE) {
+                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE ||
+                        pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
                         pos = std::find(crs_device.begin(), crs_device.end(), device);
                         if (pos != crs_device.end()) {
                             crs_device.erase(pos);
-                            AHAL_ERR("crs size %d", crs_device.size());
                             if (crs_device.size() >= 1) {
-                                AHAL_INFO("route to device 0x%x", AudioExtn::get_device_types(crs_device));
-                                voice_->RouteStream(crs_device);
+                                if (voice_->voice_.crsCall || voice_->voice_.crsVsid) {
+                                    AHAL_INFO("route to device 0x%x", AudioExtn::get_device_types(crs_device));
+                                    voice_->RouteStream(crs_device);
+                                }
                             } else {
                                 crs_device.clear();
                                 if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
                                     voice_->RouteStream({AUDIO_DEVICE_OUT_SPEAKER});
-                                else
-                                    voice_->RouteStream({AUDIO_DEVICE_OUT_EARPIECE});
                             }
                         }
                     }
@@ -1941,14 +1944,16 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         if (param_bt_sco.bt_sco_on == true) {
             if (crs_device.size() == 0) {
                 crs_device.insert(AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET);
-                voice_->RouteStream(crs_device);
+                if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                    voice_->RouteStream(crs_device);
             } else {
                 pos = std::find(crs_device.begin(), crs_device.end(), AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET);
                 if (pos != crs_device.end()) {
                     AHAL_INFO("same device has added");
                 } else {
                     crs_device.insert(AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET);
-                    voice_->RouteStream({AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET});
+                    if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                        voice_->RouteStream({AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET});
                 }
             }
         } else if (param_bt_sco.bt_sco_on == false) {
@@ -1956,11 +1961,14 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             if (pos != crs_device.end()) {
                 crs_device.erase(pos);
                 if (crs_device.size() >= 1) {
-                    voice_->RouteStream(crs_device);
-                    AHAL_INFO("route to device 0x%x", AudioExtn::get_device_types(crs_device));
+                    if (voice_->voice_.crsCall || voice_->voice_.crsVsid) {
+                        voice_->RouteStream(crs_device);
+                        AHAL_INFO("route to device 0x%x", AudioExtn::get_device_types(crs_device));
+                    }
                 } else {
                     crs_device.clear();
-                    voice_->RouteStream({AUDIO_DEVICE_OUT_SPEAKER});
+                    if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                        voice_->RouteStream({AUDIO_DEVICE_OUT_SPEAKER});
                 }
             }
         }

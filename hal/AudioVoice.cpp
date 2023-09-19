@@ -66,16 +66,15 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
             if ((voice_.in_call && mode == AUDIO_MODE_NORMAL) ||
                 (mode_ == AUDIO_MODE_IN_CALL && voice_.crsCall))
                 ret = StopCall();
-            else if (mode ==  AUDIO_MODE_CALL_SCREEN || !voice_.crsCall) {
-                if (mode_ == AUDIO_MODE_RINGTONE && voice_.crsVsid != 0) {
-                    voice_.in_call = true;
+            else if (mode ==  AUDIO_MODE_CALL_SCREEN)
+                UpdateCalls(voice_.session);
+            else if (mode == AUDIO_MODE_RINGTONE) {
+                if (voice_.crsVsid != 0) {
                     voice_.crsCall = true;
                     //check CRS concurrent case happen
-                    if (adevice->getCrsConcurrentState()) {
+                    if (adevice->getCrsConcurrentState())
                         voice_.crsLoopback = false;
-                    }
                 }
-                UpdateCalls(voice_.session);
             }
         }
     }
@@ -127,7 +126,7 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
                 voice_.crsVsid = vsid;
             }
             else {
-                if (vsid == voice_.crsVsid) {
+                if (vsid == voice_.crsVsid && voice_.crsCall) {
                     AHAL_DBG("CRS call = false");
                     ret = StopCall();
                     voice_.crsVsid = 0;
@@ -1590,7 +1589,7 @@ AudioVoice::AudioVoice() {
         voice_.session[i].tty_mode = PAL_TTY_OFF;
         voice_.session[i].volume_boost = false;
         voice_.session[i].slow_talk = false;
-        voice_.session[i].pal_voice_handle = NULL;
+        voice_.session[i].pal_voice_loopback_handle = NULL;
         voice_.session[i].hd_voice = false;
         voice_.session[i].pal_vol_data = pal_vol_;
         voice_.session[i].pal_vol_crs_data = pal_crs_vol_;
@@ -1623,6 +1622,7 @@ AudioVoice::~AudioVoice() {
         voice_.session[i].volume_boost = false;
         voice_.session[i].slow_talk = false;
         voice_.session[i].pal_voice_handle = NULL;
+        voice_.session[i].pal_voice_loopback_handle = NULL;
         voice_.session[i].hd_voice = false;
         voice_.session[i].pal_vol_data = NULL;
         voice_.session[i].pal_vol_crs_data = NULL;
