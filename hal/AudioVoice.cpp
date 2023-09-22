@@ -75,6 +75,7 @@ int AudioVoice::SetMode(const audio_mode_t mode) {
                     //check CRS concurrent case happen
                     if (adevice->getCrsConcurrentState())
                         voice_.crsLoopback = false;
+                    UpdateCalls(voice_.session);
                 }
             }
         }
