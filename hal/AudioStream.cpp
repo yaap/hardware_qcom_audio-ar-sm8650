@@ -3047,8 +3047,8 @@ int StreamOutPrimary::Open() {
 
     pal_param_bta2dp_t *param_bt_a2dp_ptr = nullptr;
     size_t bt_param_size = 0;
-    ssize_t track_count_total = 0;
     std::vector<std::shared_ptr<StreamOutPrimary>> astream_out_list;
+    ssize_t total_pal_stream_handle = 0;
 
     AHAL_INFO("Enter: OutPrimary usecase(%d: %s)", GetUseCase(), use_case_table[GetUseCase()]);
 
@@ -3216,12 +3216,15 @@ int StreamOutPrimary::Open() {
      * inconsistency with MMAP track metadata.
      */
 
-     astream_out_list = adevice->OutGetBLEStreamOutputs();
-     for (int i = 0; i < astream_out_list.size(); i++) {
-         //total tracks on stream o/ps
-         track_count_total += astream_out_list[i]->btSourceMetadata.track_count;
-     }
-    if (usecase_ == USECASE_AUDIO_PLAYBACK_MMAP && track_count_total == 0) {
+    astream_out_list = adevice->OutGetBLEStreamOutputs();
+    for (int i = 0; i < astream_out_list.size(); i++) {
+        //total valid pal_stream_handle on stream o/ps
+        if (astream_out_list[i] != NULL && astream_out_list[i]->pal_stream_handle_ != NULL) {
+            total_pal_stream_handle++;
+        }
+    }
+
+    if (usecase_ == USECASE_AUDIO_PLAYBACK_MMAP && total_pal_stream_handle == 0) {
         audio_stream_out* stream_out;
         GetStreamHandle(&stream_out);
         ssize_t track_count = 1;
