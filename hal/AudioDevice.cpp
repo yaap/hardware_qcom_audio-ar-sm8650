@@ -2024,7 +2024,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
         AHAL_INFO("BTSCO LC3 mode = %d", bt_lc3_speech_enabled);
     }
 
-    ret = str_parms_get_str(parms, "bt_ble_swb", value, sizeof(value));
+    ret = str_parms_get_str(parms, "bt_lc3_swb", value, sizeof(value));
     if (ret >= 0) {
         pal_param_btsco_t param_bt_sco_swb = {};
         if (strcmp(value, AUDIO_PARAMETER_VALUE_ON) == 0) {
