@@ -2353,6 +2353,18 @@ char* AudioDevice::GetParameters(const char *keys) {
         }
     }
 
+    ret = str_parms_get_str(query, "proxyRecordActive", value, sizeof(value));
+    if (ret >= 0) {
+        char proxy_record_state[6];
+        ret = pal_get_param(PAL_PARAM_ID_PROXY_RECORD_SESSION, (void **)&proxy_record_state, &size, nullptr);
+        if (!ret && size > 0) {
+            str_parms_add_str(reply, "proxyRecordActive", proxy_record_state);
+            AHAL_INFO("proxyRecordActive = %s", proxy_record_state);
+        } else {
+            AHAL_ERR("Error happened for getting proxyRecordActive param");
+        }
+    }
+
     AudioExtn::audio_extn_get_parameters(adev_, query, reply);
     audio_extn_sound_trigger_get_parameters(adev_, query, reply);
     if (voice_)
