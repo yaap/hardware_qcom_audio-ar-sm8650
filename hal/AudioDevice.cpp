@@ -1486,6 +1486,8 @@ int AudioDevice::SetParameters(const char *kvpairs) {
     std::vector<std::shared_ptr<StreamInPrimary>> temp_stream_in_list;
     std::shared_ptr<StreamOutPrimary> astream_out = NULL;
     uint8_t channels = 0;
+    audio_mode_t mode;
+    bool voice_active = false;
     std::set<audio_devices_t> new_devices;
     std::set<audio_devices_t>::iterator pos;
 
@@ -1493,6 +1495,8 @@ int AudioDevice::SetParameters(const char *kvpairs) {
     ret = voice_->VoiceSetParameters(kvpairs);
     if (ret)
         AHAL_ERR("Error in VoiceSetParameters %d", ret);
+
+    voice_active = voice_->get_voice_call_state(&mode);
 
     parms = str_parms_create_str(kvpairs);
     if (!parms) {
@@ -1655,7 +1659,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                      pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
                      if (crs_device.size() == 0) {
                          crs_device.insert(device);
-                         if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                         if (!voice_active && (mode != AUDIO_MODE_IN_CALL))
                              voice_->RouteStream({device});
                      } else {
                          pos = std::find(crs_device.begin(), crs_device.end(), device);
@@ -1663,7 +1667,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                              AHAL_INFO("same device has added");
                          } else {
                              crs_device.insert(device);
-                             if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                             if (!voice_active && (mode != AUDIO_MODE_IN_CALL))
                                  voice_->RouteStream({device});
                          }
                      }
@@ -1876,7 +1880,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                      if (pos != crs_device.end()) {
                         crs_device.erase(pos);
                         if (crs_device.size() >= 1) {
-                            if (voice_->voice_.crsCall || voice_->voice_.crsVsid) {
+                            if (!voice_active && (mode != AUDIO_MODE_IN_CALL)) {
                                 AHAL_INFO("route to device 0x%x", AudioExtn::get_device_types(crs_device));
                                 voice_->RouteStream(crs_device);
                             }

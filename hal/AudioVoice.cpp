@@ -828,8 +828,8 @@ int AudioVoice::VoiceStart(voice_session_t *session) {
     out_ch_info.ch_map[1] = PAL_CHMAP_CHANNEL_FR;
 
     if (voice_.crsCall) {
-        if (adevice->crs_device.size() == 0 ||
-            (voice_.crsLoopback && pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET)) {
+        if (voice_.crsLoopback &&
+            (adevice->crs_device.size() == 0 || pal_voice_rx_device_id_ == PAL_DEVICE_OUT_HANDSET)) {
              AHAL_DBG("No plugin device, use speaker by default in CRS call");
              pal_voice_rx_device_id_ = PAL_DEVICE_OUT_SPEAKER;
              pal_voice_tx_device_id_ = PAL_DEVICE_IN_SPEAKER_MIC;
