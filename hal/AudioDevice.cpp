@@ -651,12 +651,16 @@ void AudioDevice::CloseStreamIn(std::shared_ptr<StreamInPrimary> stream) {
     auto iter =
         std::find(stream_in_list_.begin(), stream_in_list_.end(), stream);
     if (iter == stream_in_list_.end()) {
-        AHAL_ERR("invalid output stream");
+        AHAL_ERR("invalid input stream");
     } else {
-        if (voice_) {
-            voice_->stream_in_primary_ = nullptr;
-        }
         stream_in_list_.erase(iter);
+        if (voice_) {
+            if (stream_in_list_.size() == 0) {
+                voice_->stream_in_primary_ = nullptr;
+            } else {
+                voice_->stream_in_primary_ = stream_in_list_[0];
+            }
+        }
     }
     in_list_mutex.unlock();
 }
@@ -1380,18 +1384,26 @@ int AudioDevice::SetMicMute(bool state) {
     int ret = 0;
     std::shared_ptr<StreamInPrimary> astream_in;
     mute_ = state;
+    audio_stream_in* stream_in = NULL;
+    std::vector<std::shared_ptr<StreamInPrimary>> temp_stream_in_list;
 
     AHAL_DBG("%s: enter: %d", __func__, state);
     if (AudioExtn::audio_extn_hfp_is_active(adev_))
         ret = AudioExtn::audio_extn_hfp_set_mic_mute(state);
     if (voice_)
         ret = voice_->SetMicMute(state);
-    for (int i = 0; i < stream_in_list_.size(); i++) {
-         astream_in = stream_in_list_[i];
-         if (astream_in) {
-             AHAL_VERBOSE("Found existing stream associated with astream_in");
-             ret = astream_in->SetMicMute(state);
-         }
+
+    in_list_mutex.lock();
+    //cache the stream in list first with mutex protected.
+    temp_stream_in_list = stream_in_list_;
+    in_list_mutex.unlock();
+    for (int i = 0; i < temp_stream_in_list.size(); i++) {
+        temp_stream_in_list[i]->GetStreamHandle(&stream_in);
+        astream_in = adev_->InGetStream((audio_stream_t*)stream_in);
+        if (astream_in) {
+            AHAL_VERBOSE("Found existing stream associated with astream_in");
+            ret = astream_in->SetMicMute(state);
+        }
     }
 
     AHAL_DBG("exit: ret %d", ret);
@@ -1471,6 +1483,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
     audio_stream_in* stream_in = NULL;
     audio_stream_out* stream_out = NULL;
     std::shared_ptr<StreamInPrimary> astream_in = NULL;
+    std::vector<std::shared_ptr<StreamInPrimary>> temp_stream_in_list;
     std::shared_ptr<StreamOutPrimary> astream_out = NULL;
     uint8_t channels = 0;
     std::set<audio_devices_t> new_devices;
@@ -1494,24 +1507,32 @@ int AudioDevice::SetParameters(const char *kvpairs) {
          (property_get_bool("vendor.audio.hdr.spf.record.enable", false))) {
         changes_done = hdr_set_parameters(adev_, parms);
         if (changes_done) {
-            for (int i = 0; i < stream_in_list_.size(); i++) {
-                stream_in_list_[i]->GetStreamHandle(&stream_in);
+            in_list_mutex.lock();
+            //cache the stream in list first with mutex protected.
+            temp_stream_in_list = stream_in_list_;
+            in_list_mutex.unlock();
+            for (int i = 0; i < temp_stream_in_list.size(); i++) {
+                temp_stream_in_list[i]->GetStreamHandle(&stream_in);
                 astream_in = adev_->InGetStream((audio_stream_t*)stream_in);
-                if ( (astream_in->source_ == AUDIO_SOURCE_UNPROCESSED) &&
-                   (astream_in->config_.sample_rate == 48000) ) {
-                    AHAL_DBG("Forcing PAL device switch for HDR");
-                    channels =
-                        audio_channel_count_from_in_mask(astream_in->config_.channel_mask);
-                    if (channels == 4) {
-                        if (adev_->hdr_record_enabled) {
-                            new_devices = astream_in->mAndroidInDevices;
-                            astream_in->RouteStream(new_devices, true);
+                if (astream_in) {
+                    if ( (astream_in->source_ == AUDIO_SOURCE_UNPROCESSED) &&
+                       (astream_in->config_.sample_rate == 48000) ) {
+                        AHAL_DBG("Forcing PAL device switch for HDR");
+                        channels =
+                            audio_channel_count_from_in_mask(astream_in->config_.channel_mask);
+                        if (channels == 4) {
+                            if (adev_->hdr_record_enabled) {
+                                new_devices = astream_in->mAndroidInDevices;
+                                astream_in->RouteStream(new_devices, true);
+                            }
                         }
+                        break;
+                    } else if (property_get_bool("vendor.audio.hdr.spf.record.enable", false)) {
+                        new_devices = astream_in->mAndroidInDevices;
+                        astream_in->RouteStream(new_devices, true);
                     }
-                    break;
-                } else if (property_get_bool("vendor.audio.hdr.spf.record.enable", false)) {
-                    new_devices = astream_in->mAndroidInDevices;
-                    astream_in->RouteStream(new_devices, true);
+                } else {
+                    AHAL_DBG("input stream already closed!");
                 }
             }
         }
@@ -1623,29 +1644,31 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                 if (ret!=0) {
                     AHAL_ERR("pal set param failed for device connection, pal_device_ids:%d",
                              pal_device_ids[i]);
-                } else {
-                    if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
-                        if (crs_device.size() == 0) {
-                           crs_device.insert(device);
-                           if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
-                               voice_->RouteStream({device});
-                        } else {
-                           pos = std::find(crs_device.begin(), crs_device.end(), device);
-                           if (pos != crs_device.end()) {
-                               AHAL_INFO("same device has added");
-                           } else {
-                               crs_device.insert(device);
-                               if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
-                                   voice_->RouteStream({device});
-                           }
-                        }
-                    }
                 }
             }
             AHAL_INFO("pal set param success  for device connection");
+
+            for (int i = 0; i < pal_device_count; i++) {
+                 if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
+                     pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
+                     pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE ||
+                     pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
+                     if (crs_device.size() == 0) {
+                         crs_device.insert(device);
+                         if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                             voice_->RouteStream({device});
+                     } else {
+                         pos = std::find(crs_device.begin(), crs_device.end(), device);
+                         if (pos != crs_device.end()) {
+                             AHAL_INFO("same device has added");
+                         } else {
+                             crs_device.insert(device);
+                             if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                                 voice_->RouteStream({device});
+                         }
+                     }
+                 }
+	    }
             /* check if capture profile is supported or not */
            if (audio_is_usb_out_device(device) || audio_is_usb_in_device(device)) {
                 pal_param_device_capability_t *device_cap_query = (pal_param_device_capability_t *)
@@ -1840,28 +1863,30 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                         sizeof(pal_param_device_connection_t));
                 if (ret!=0) {
                     AHAL_ERR("pal set param failed for device disconnect");
-                } else {
-                    if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE ||
-                        pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
-                        pos = std::find(crs_device.begin(), crs_device.end(), device);
-                        if (pos != crs_device.end()) {
-                            crs_device.erase(pos);
-                            if (crs_device.size() >= 1) {
-                                if (voice_->voice_.crsCall || voice_->voice_.crsVsid) {
-                                    AHAL_INFO("route to device 0x%x", AudioExtn::get_device_types(crs_device));
-                                    voice_->RouteStream(crs_device);
-                                }
-                            } else {
-                                crs_device.clear();
-                                if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
-                                    voice_->RouteStream({AUDIO_DEVICE_OUT_SPEAKER});
-                            }
-                        }
-                    }
                 }
                 AHAL_INFO("pal set param sucess for device disconnect");
+            }
+
+            for (int i = 0; i < pal_device_count; i++) {
+                 if (pal_device_ids[i] == PAL_DEVICE_OUT_USB_HEADSET ||
+                     pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADSET ||
+                     pal_device_ids[i] == PAL_DEVICE_OUT_WIRED_HEADPHONE ||
+                     pal_device_ids[i] == PAL_DEVICE_OUT_BLUETOOTH_BLE) {
+                     pos = std::find(crs_device.begin(), crs_device.end(), device);
+                     if (pos != crs_device.end()) {
+                        crs_device.erase(pos);
+                        if (crs_device.size() >= 1) {
+                            if (voice_->voice_.crsCall || voice_->voice_.crsVsid) {
+                                AHAL_INFO("route to device 0x%x", AudioExtn::get_device_types(crs_device));
+                                voice_->RouteStream(crs_device);
+                            }
+                        } else {
+                            crs_device.clear();
+                            if (voice_->voice_.crsCall || voice_->voice_.crsVsid)
+                                voice_->RouteStream({AUDIO_DEVICE_OUT_SPEAKER});
+                        }
+                     }
+                 }
             }
         }
     }
@@ -2328,6 +2353,18 @@ char* AudioDevice::GetParameters(const char *keys) {
         }
     }
 
+    ret = str_parms_get_str(query, "proxyRecordActive", value, sizeof(value));
+    if (ret >= 0) {
+        char proxy_record_state[6];
+        ret = pal_get_param(PAL_PARAM_ID_PROXY_RECORD_SESSION, (void **)&proxy_record_state, &size, nullptr);
+        if (!ret && size > 0) {
+            str_parms_add_str(reply, "proxyRecordActive", proxy_record_state);
+            AHAL_INFO("proxyRecordActive = %s", proxy_record_state);
+        } else {
+            AHAL_ERR("Error happened for getting proxyRecordActive param");
+        }
+    }
+
     AudioExtn::audio_extn_get_parameters(adev_, query, reply);
     audio_extn_sound_trigger_get_parameters(adev_, query, reply);
     if (voice_)
@@ -2411,7 +2448,7 @@ void AudioDevice::FillAndroidDeviceMap() {
     android_device_map_.insert(std::make_pair(AUDIO_DEVICE_IN_BLUETOOTH_A2DP, PAL_DEVICE_IN_BLUETOOTH_A2DP));
     android_device_map_.insert(std::make_pair(AUDIO_DEVICE_IN_BLE_HEADSET, PAL_DEVICE_IN_BLUETOOTH_BLE));
     //android_device_map_.insert(std::make_pair(AUDIO_DEVICE_IN_LOOPBACK, PAL_DEVICE_IN_LOOPBACK);
-    //android_device_map_.insert(std::make_pair(AUDIO_DEVICE_IN_IP, PAL_DEVICE_IN_IP);
+    android_device_map_.insert(std::make_pair(AUDIO_DEVICE_IN_IP, PAL_DEVICE_IN_RECORD_PROXY));
     //android_device_map_.insert(std::make_pair(AUDIO_DEVICE_IN_BUS, PAL_DEVICE_IN_BUS);
     android_device_map_.insert(std::make_pair(AUDIO_DEVICE_IN_PROXY, PAL_DEVICE_IN_PROXY));
     android_device_map_.insert(std::make_pair(AUDIO_DEVICE_IN_USB_HEADSET, PAL_DEVICE_IN_USB_HEADSET));
