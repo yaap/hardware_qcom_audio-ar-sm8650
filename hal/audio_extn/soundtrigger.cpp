@@ -446,6 +446,9 @@ void audio_extn_sound_trigger_get_parameters(std::shared_ptr<AudioDevice> adev _
             str_parms_add_str(reply, VUI_PARAMETER_GET_META_DATA, value);
         }
     }
+
+    if (query_str)
+        free(query_str);
 }
 
 int audio_extn_sound_trigger_init(std::shared_ptr<AudioDevice> adev)
