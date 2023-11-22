@@ -1841,6 +1841,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             AudioExtn::get_controller_stream_from_params(parms, &controller, &stream);
             param_device_connection.device_config.dp_config.controller = controller;
             param_device_connection.device_config.dp_config.stream = stream;
+            dp_controller = controller;
             dp_stream = stream;
             AHAL_INFO("plugin device cont %d stream %d", controller, stream);
         }
@@ -1909,6 +1910,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
 
     ret = str_parms_get_str(parms, "A2dpSuspended" , value, sizeof(value));
     if (ret >= 0) {
+        audio_mode_t mode = AUDIO_MODE_NORMAL;
         pal_param_bta2dp_t param_bt_a2dp;
         param_bt_a2dp.is_suspend_setparam = true;
 
@@ -1918,6 +1920,10 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             param_bt_a2dp.a2dp_suspended = false;
 
         param_bt_a2dp.dev_id = PAL_DEVICE_OUT_BLUETOOTH_A2DP;
+
+        if (voice_)
+            voice_->get_voice_call_state(&mode);
+        param_bt_a2dp.is_in_call = (mode != AUDIO_MODE_NORMAL);
 
         AHAL_INFO("BT A2DP Suspended = %s, command received", value);
         std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
@@ -2191,6 +2197,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
 
     ret = str_parms_get_str(parms, "A2dpCaptureSuspend", value, sizeof(value));
     if (ret >= 0) {
+        audio_mode_t mode = AUDIO_MODE_NORMAL;
         pal_param_bta2dp_t param_bt_a2dp;
         param_bt_a2dp.is_suspend_setparam = true;
 
@@ -2200,6 +2207,10 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             param_bt_a2dp.a2dp_capture_suspended = false;
 
         param_bt_a2dp.dev_id = PAL_DEVICE_IN_BLUETOOTH_A2DP;
+
+        if (voice_)
+            voice_->get_voice_call_state(&mode);
+        param_bt_a2dp.is_in_call = (mode != AUDIO_MODE_NORMAL);
 
         AHAL_INFO("BT A2DP Capture Suspended = %s, command received", value);
         std::unique_lock<std::mutex> guard(reconfig_wait_mutex_);
@@ -2217,6 +2228,7 @@ int AudioDevice::SetParameters(const char *kvpairs) {
 
     ret = str_parms_get_str(parms, "LeAudioSuspended", value, sizeof(value));
     if (ret >= 0) {
+        audio_mode_t mode = AUDIO_MODE_NORMAL;
         pal_param_bta2dp_t param_bt_a2dp;
         param_bt_a2dp.is_suspend_setparam = true;
 
@@ -2227,6 +2239,10 @@ int AudioDevice::SetParameters(const char *kvpairs) {
             param_bt_a2dp.a2dp_suspended = false;
             param_bt_a2dp.a2dp_capture_suspended = false;
         }
+
+        if (voice_)
+            voice_->get_voice_call_state(&mode);
+        param_bt_a2dp.is_in_call = (mode != AUDIO_MODE_NORMAL);
 
         AHAL_INFO("BT LEA Suspended = %s, command received", value);
         //Synchronize the suspend/resume calls from setparams and reconfig_cb

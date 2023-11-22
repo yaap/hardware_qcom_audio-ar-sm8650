@@ -128,9 +128,10 @@ int AudioVoice::VoiceSetParameters(const char *kvpairs) {
                 voice_.crsVsid = vsid;
             }
             else {
-                if (vsid == voice_.crsVsid && voice_.crsCall) {
+                if (vsid == voice_.crsVsid) {
                     AHAL_DBG("CRS call = false");
-                    ret = StopCall();
+                    if (voice_.crsCall)
+                        ret = StopCall();
                     voice_.crsVsid = 0;
                 }
             }
