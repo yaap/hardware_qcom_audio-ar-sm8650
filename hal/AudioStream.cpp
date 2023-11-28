@@ -683,7 +683,7 @@ static int astream_dump(const struct audio_stream *stream, int fd) {
 #ifdef USEHIDL7_1
 static int astream_set_latency_mode(struct audio_stream_out *stream, audio_latency_mode_t mode) {
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
-    std::shared_ptr<StreamOutPrimary> astream_out;
+    std::shared_ptr<StreamOutPrimary> astream_out = NULL;
     pal_param_latency_mode_t *param_latency_mode_ptr = NULL;
     int ret = 0;
 
@@ -698,6 +698,12 @@ static int astream_set_latency_mode(struct audio_stream_out *stream, audio_laten
         astream_out = adevice->OutGetStream((audio_stream_t*)stream);
     } else {
         AHAL_ERR("unable to get audio device");
+        ret = -EINVAL;
+        goto exit;
+    }
+
+    if (astream_out == NULL){
+        AHAL_ERR("unable to get audio stream");
         ret = -EINVAL;
         goto exit;
     }
@@ -732,7 +738,7 @@ exit:
 static int astream_get_recommended_latency_modes(struct audio_stream_out *stream,
                                                 audio_latency_mode_t *modes, size_t *num_modes) {
     std::shared_ptr<AudioDevice> adevice = AudioDevice::GetInstance();
-    std::shared_ptr<StreamOutPrimary> astream_out;
+    std::shared_ptr<StreamOutPrimary> astream_out = NULL;
     pal_param_latency_mode_t *param_latency_mode_ptr = NULL;
     int ret = 0;
     size_t size;
@@ -741,6 +747,12 @@ static int astream_get_recommended_latency_modes(struct audio_stream_out *stream
         astream_out = adevice->OutGetStream((audio_stream_t*)stream);
     } else {
         AHAL_ERR("unable to get audio device");
+        ret = -EINVAL;
+        goto exit;
+    }
+
+    if (astream_out == NULL){
+        AHAL_ERR("unable to get audio stream");
         ret = -EINVAL;
         goto exit;
     }
