@@ -3164,6 +3164,7 @@ int StreamOutPrimary::Open() {
         case PAL_STREAM_PROXY:
             if (isDeviceAvailable(PAL_DEVICE_OUT_PROXY)) {
                 streamAttributes_.info.opt_stream_info.rx_proxy_type = PAL_STREAM_PROXY_RX_WFD;
+                mPalOutDevice->id = PAL_DEVICE_OUT_RECORD_PROXY;
             }
             break;
 
