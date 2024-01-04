@@ -139,6 +139,8 @@ AUDIO_MODULES += libcustomva_intf
 AUDIO_MODULES += libvui_intf
 AUDIO_MODULES += libVoiceSdk
 AUDIO_MODULES += libtensorflowlite_c
+AUDIO_MODULES += sm8_gr1UsPdk6XsMfcn220819Enpu4FloateAIv34.uim
+AUDIO_MODULES += sm8_gr3UsMFCN230612eAIv34ENPUv4Float.uim
 
 AUDIO_MODULES += $(AUDIO_AGM)
 AUDIO_MODULES += $(AUDIO_PAL)
