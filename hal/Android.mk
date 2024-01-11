@@ -1,6 +1,6 @@
 LOCAL_PATH := $(call my-dir)
 
-LOCAL_AUDIO_SERVICE_64 := taro kalama anorak pineapple pitti
+LOCAL_AUDIO_SERVICE_64 := taro kalama anorak pineapple pitti pitti_32go
 
 include $(CLEAR_VARS)
 
