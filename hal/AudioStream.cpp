@@ -3321,10 +3321,14 @@ int StreamOutPrimary::Open() {
         if (volume_->no_of_volpair != streamAttributes_.out_media_config.ch_info.channels)
             refactorVolumeData(volume_->volume_pair[0].vol, volume_->no_of_volpair == 1 ?
                                 volume_->volume_pair[0].vol : volume_->volume_pair[1].vol);
-        AHAL_DBG("set cached volume (%f)", volume_->volume_pair[0].vol);
-        ret = pal_stream_set_volume(pal_stream_handle_, volume_);
-        if (ret) {
-            AHAL_ERR("Pal Stream volume Error (%x)", ret);
+        if (volume_) {
+            AHAL_DBG("set cached volume (%f)", volume_->volume_pair[0].vol);
+            ret = pal_stream_set_volume(pal_stream_handle_, volume_);
+            if (ret) {
+                AHAL_ERR("Pal Stream volume Error (%x)", ret);
+            }
+        } else {
+            AHAL_ERR("Pal Stream volume Error , unable to allocate memory");
         }
     }
 
