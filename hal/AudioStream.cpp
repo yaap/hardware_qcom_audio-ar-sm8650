@@ -2698,11 +2698,10 @@ int StreamOutPrimary::SetParameters(struct str_parms *parms) {
         goto error;
 
     ret = AudioExtn::get_controller_stream_from_params(parms, &controller, &stream);
-    if (ret >= 0) {
+    if (ret >= 0 && (controller >=0 || stream >=0)) {
         adevice->dp_controller = controller;
         adevice->dp_stream = stream;
-        if (stream >= 0 || controller >= 0)
-            AHAL_INFO("ret %d, plugin device cont %d stream %d", ret, controller, stream);
+        AHAL_INFO("ret %d, plugin device cont %d stream %d", ret, controller, stream);
     } else {
         AHAL_ERR("error %d, failed to get stream and controller", ret);
     }
