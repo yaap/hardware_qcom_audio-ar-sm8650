@@ -1992,7 +1992,8 @@ pal_stream_type_t StreamInPrimary::GetPalStreamType(
      *For AUDIO_SOURCE_UNPROCESSED we use LL pal stream as it corresponds to
      *RAW record graphs ( record with no pp)
      */
-    if (source_ == AUDIO_SOURCE_UNPROCESSED) {
+    if (source_ == AUDIO_SOURCE_UNPROCESSED &&
+        halStreamFlags != AUDIO_INPUT_FLAG_MMAP_NOIRQ) {
         palStreamType = PAL_STREAM_RAW;
         return palStreamType;
     } else if (source_ == AUDIO_SOURCE_VOICE_RECOGNITION) {
@@ -5507,12 +5508,19 @@ StreamInPrimary::StreamInPrimary(audio_io_handle_t handle,
     }
 
     /* this is required for USB otherwise adev_open_input_stream is failed */
-    if (!config_.sample_rate)
+    if (!config_.sample_rate) {
         config_.sample_rate = DEFAULT_OUTPUT_SAMPLING_RATE;
-    if (!config_.channel_mask)
+    }
+    if (!config_.channel_mask) {
         config_.channel_mask = AUDIO_CHANNEL_IN_MONO;
-    if (!config_.format)
+    }
+
+    if(!config_.format && flags == AUDIO_INPUT_FLAG_DIRECT) {
+        // input direct flag is used for compress capture
+        config_.format = AUDIO_FORMAT_AAC_LC;
+    } else if (!config_.format) {
         config_.format = AUDIO_FORMAT_PCM_16_BIT;
+    }
 
     /*
      * Audio config set from client may not be same as config used in pal,
