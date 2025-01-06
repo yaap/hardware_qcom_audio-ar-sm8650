@@ -99,8 +99,8 @@ void Lvacfs::startInputStream(StreamInPrimary* in) {
     wrapper_ops_->set_params_file_path(params_file_path_);
     int channel_count = audio_channel_count_from_in_mask(in->config_.channel_mask);
     uint32_t channels = ((channel_count & 0xFFFF) << 16) | (channel_count & 0xFFFF);
-    // Set format to false (0) since lvacfs does not support pal audio format
-    uint64_t sample_rate_and_format = ((uint64_t)0 << 32) | in->config_.sample_rate;
+    // Waffle uses format 3, assume other sm8650 lvacfs devices do as well
+    uint64_t sample_rate_and_format = ((uint64_t)3 << 32) | in->config_.sample_rate;
     int ret = wrapper_ops_->create_instance(in->lvacfs_instance, in->source_, sample_rate_and_format,
                                             channels);
     if (ret < 0) {
@@ -112,7 +112,7 @@ void Lvacfs::startInputStream(StreamInPrimary* in) {
 void Lvacfs::processInputStream(StreamInPrimary* in, void* buffer, size_t bytes) {
     std::lock_guard<std::mutex> lock(in->lvacfs_lock);
     int channel_count = audio_channel_count_from_in_mask(in->config_.channel_mask);
-    uint32_t samples = bytes / (channel_count * audio_bytes_per_sample(in->config_.format));
+    uint32_t samples = 0;
     uint8_t status_buffer[0x160] = {0};
     int ret = wrapper_ops_->process(in->lvacfs_instance, buffer, buffer, samples, status_buffer);
     if (ret < 0) {
