@@ -37,18 +37,14 @@ LOCAL_MODULE_OWNER := qti
 LOCAL_VENDOR_MODULE := true
 LOCAL_ARM_MODE := arm
 
-ifneq ($(TARGET_PROVIDES_AUDIO_MANIFEST),true)
 LOCAL_VINTF_FRAGMENTS := ../configs/common/manifest_non_qmaa.xml
-endif
 
 ifeq ($(SOONG_CONFIG_android_hardware_audio_run_64bit), true)
 LOCAL_MULTILIB := 64
 endif
 
-ifneq ($(TARGET_PROVIDES_AUDIO_MANIFEST),true)
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_LSM_HIDL)),true)
 LOCAL_VINTF_FRAGMENTS += ../configs/common/manifest_non_qmaa_extn.xml
-endif
 endif
 
 LOCAL_CFLAGS += -Wno-macro-redefined
@@ -82,7 +78,6 @@ LOCAL_SRC_FILES := \
     AudioStream.cpp \
     AudioDevice.cpp \
     AudioVoice.cpp \
-    Lvacfs.cpp \
     audio_extn/soundtrigger.cpp \
     audio_extn/Gain.cpp \
     audio_extn/AudioExtn.cpp
