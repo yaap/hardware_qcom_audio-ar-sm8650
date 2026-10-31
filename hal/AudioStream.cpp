@@ -4588,6 +4588,10 @@ int StreamInPrimary::Standby() {
         lvacfs.stopInputStream(this);
     }
 
+    if (oprec_handle) {
+        oprec.stopInputStream(this);
+    }
+
     stream_mutex_.unlock();
     AHAL_DBG("Exit ret: %d", ret);
     return ret;
@@ -5026,6 +5030,49 @@ int StreamInPrimary::Open() {
         streamAttributes_.type = PAL_STREAM_VOICE_CALL_RECORD;
         streamAttributes_.info.voice_rec_info.record_direction = INCALL_RECORD_VOICE_UPLINK_DOWNLINK;
     }
+
+    oprec_active_ = false;
+    oprec_profile_ = -1;
+    /*
+     * The stock HAL only feeds these sources through the OPLUS record
+     * algorithms (OplusRecord::getRecordId), and only when the stream is not
+     * compressed or mmap based. Voice call, VoIP and raw captures are left
+     * untouched.
+     */
+    if (oprec.getWrapperOps() && config_.sample_rate == 48000 &&
+        Oprec::getFormatId(config_.format) >= 0 &&
+        usecase_ != USECASE_AUDIO_RECORD_MMAP && usecase_ != USECASE_AUDIO_RECORD_COMPRESS &&
+        (source_ == AUDIO_SOURCE_DEFAULT || source_ == AUDIO_SOURCE_MIC ||
+         source_ == AUDIO_SOURCE_CAMCORDER || source_ == AUDIO_SOURCE_VOICE_RECOGNITION)) {
+        audio_devices_t device = *mAndroidInDevices.begin();
+        oprec_profile_ = Oprec::getProfile(device, source_, channels, OPREC_SCENE_DEFAULT, -1,
+                                           config_.sample_rate);
+        if (oprec_profile_ >= 0) {
+            oprec_record_type_ = Oprec::getRecordType(streamAttributes_.type, source_, channels);
+            oprec_active_ = true;
+        } else {
+            AHAL_INFO("OPREC does not handle device %#x source %d", device, source_);
+        }
+    } else if (oprec.getWrapperOps()) {
+        AHAL_INFO("OPREC skipped: rate=%u format=%#x usecase=%d source=%d",
+                  config_.sample_rate, config_.format, usecase_, source_);
+    }
+
+    /*
+     * The OPLUS record algorithms are fed from the multi-mic capture backend.
+     * Regular built-in mic recordings request it, exactly like the stock HAL,
+     * so the algorithm sees the same input it was calibrated for.
+     */
+    if (oprec_active_ && streamAttributes_.type == PAL_STREAM_DEEP_BUFFER && channels < 3 &&
+        source_ != AUDIO_SOURCE_VOICE_RECOGNITION &&
+        get_hdr_mode() == AUDIO_RECORD_DEFAULT &&
+        (mPalInDevice->id == PAL_DEVICE_IN_HANDSET_MIC ||
+         mPalInDevice->id == PAL_DEVICE_IN_SPEAKER_MIC)) {
+        strlcpy(mPalInDevice->custom_config.custom_key, "oprec-mic",
+                sizeof(mPalInDevice->custom_config.custom_key));
+        AHAL_INFO("Setting custom key as %s", mPalInDevice->custom_config.custom_key);
+    }
+
     streamAttributes_.flags = (pal_stream_flags_t)0;
     streamAttributes_.direction = PAL_AUDIO_INPUT;
     streamAttributes_.in_media_config.sample_rate = config_.sample_rate;
@@ -5130,6 +5177,10 @@ int StreamInPrimary::Open() {
 
     if (lvacfs.getWrapperOps() && !lvacfs_handle) {
         lvacfs.startInputStream(this);
+    }
+
+    if (oprec_active_ && !oprec_handle) {
+        oprec.startInputStream(this);
     }
 
 set_buff_size:
@@ -5410,6 +5461,10 @@ ssize_t StreamInPrimary::read(const void *buffer, size_t bytes) {
         lvacfs.processInputStream(this, palBuffer.buffer, palBuffer.size);
     }
 
+    if (oprec_handle) {
+        oprec.processInputStream(this, palBuffer.buffer, palBuffer.size);
+    }
+
 exit:
     if (mBytesRead <= UINT64_MAX - bytes) {
         mBytesRead += bytes;
@@ -5470,6 +5525,7 @@ StreamInPrimary::StreamInPrimary(audio_io_handle_t handle,
     StreamPrimary(handle, devices, config),
     mAndroidInDevices(devices),
     lvacfs(Lvacfs::getInstance()),
+    oprec(Oprec::getInstance()),
     flags_(flags),
     btSinkMetadata{0, nullptr},
     pal_vui_handle_(nullptr),
@@ -5717,6 +5773,9 @@ error:
 
 StreamInPrimary::~StreamInPrimary() {
     stream_mutex_.lock();
+    if (oprec_handle) {
+        oprec.stopInputStream(this);
+    }
     if (pal_stream_handle_ && !is_st_session) {
         AHAL_DBG("close stream, pal_stream_handle (%p)",
              pal_stream_handle_);

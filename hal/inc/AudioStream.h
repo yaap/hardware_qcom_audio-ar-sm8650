@@ -48,6 +48,7 @@
 #include "PalDefs.h"
 #include <AudioExtn.h>
 #include <Lvacfs.h>
+#include <Oprec.h>
 #include <mutex>
 #include <map>
 #include <unordered_map>
@@ -662,6 +663,13 @@ private:
     void** lvacfs_handle = nullptr;
     uint32_t lvacfs_profile = 0;
     Lvacfs& lvacfs;
+    friend class Oprec;
+    void** oprec_handle = nullptr;
+    std::mutex oprec_lock;
+    Oprec& oprec;
+    int32_t oprec_profile_ = -1;
+    uint32_t oprec_record_type_ = 0;
+    bool oprec_active_ = false;
 public:
     StreamInPrimary(audio_io_handle_t handle,
                     const std::set<audio_devices_t> &devices,

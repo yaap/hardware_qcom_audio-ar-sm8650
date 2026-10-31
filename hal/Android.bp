@@ -86,6 +86,7 @@ target_board_platform_cc_library_shared {
         "AudioStream.cpp",
         "AudioVoice.cpp",
         "Lvacfs.cpp",
+        "Oprec.cpp",
         "audio_extn/AudioExtn.cpp",
         "audio_extn/Gain.cpp",
         "audio_extn/Gef.cpp",

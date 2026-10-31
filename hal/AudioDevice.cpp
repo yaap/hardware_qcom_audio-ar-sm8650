@@ -59,6 +59,7 @@
 
 #include "PalApi.h"
 #include "PalDefs.h"
+#include <Oprec.h>
 
 #include <AudioExtn.h>
 #include "audio_extn.h"
@@ -355,6 +356,9 @@ static void hdr_get_parameters(std::shared_ptr<AudioDevice> adev,
 AudioDevice::~AudioDevice() {
     if (Lvacfs::isLvacfsEnabled()) {
         Lvacfs::getInstance().deinit();
+    }
+    if (Oprec::isOprecEnabled()) {
+        Oprec::getInstance().deinit();
     }
     audio_extn_gef_deinit(adev_);
     audio_extn_sound_trigger_deinit(adev_);
@@ -1252,6 +1256,9 @@ int AudioDevice::Init(hw_device_t **device, const hw_module_t *module) {
     if (Lvacfs::isLvacfsEnabled()) {
         Lvacfs::getInstance().init();
     }
+    if (Oprec::isOprecEnabled()) {
+        Oprec::getInstance().init();
+    }
     adev_init_ref_count += 1;
 
     memset(&microphones, 0, sizeof(microphone_characteristics_t));
@@ -1757,6 +1764,15 @@ int AudioDevice::SetParameters(const char *kvpairs) {
                     (void*)&param_device_rotation,
                     sizeof(pal_param_device_rotation_t));
             AHAL_DBG("Speakers swapped ");
+        }
+
+        /*
+         * AOSP only publishes rotation when ro.audio.monitorRotation is set.
+         * Convert it to the 0..3 orientation the OPLUS record algorithm uses
+         * (the same value the stock vendor_audiorecord_orientation carries).
+         */
+        if (val >= 0 && val <= 270 && (val % 90) == 0) {
+            Oprec::getInstance().setDeviceOrientation(val / 90);
         }
     }
 
