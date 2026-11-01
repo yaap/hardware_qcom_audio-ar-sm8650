@@ -7,6 +7,10 @@
 
 #include <AudioStream.h>
 #include <Oprec.h>
+#include <OprecDeviceProfiles.h>
+#include <cutils/str_parms.h>
+#include <cstdlib>
+#include <cstring>
 #include <dlfcn.h>
 #include <log/log.h>
 #include <unistd.h>
@@ -224,95 +228,47 @@ void Oprec::setDeviceOrientation(int orientation) {
     }
 }
 
-int32_t Oprec::getProfile(audio_devices_t device, audio_source_t source, int32_t channels,
-                          int32_t scene, int32_t effect_type, uint32_t sample_rate) {
-    const bool is_builtin = device == AUDIO_DEVICE_IN_BUILTIN_MIC ||
-                            device == AUDIO_DEVICE_IN_BACK_MIC;
-    const bool is_wired = device == AUDIO_DEVICE_IN_WIRED_HEADSET;
-    const bool is_usb = device == AUDIO_DEVICE_IN_USB_DEVICE ||
-                        device == AUDIO_DEVICE_IN_USB_HEADSET;
+void Oprec::setParameters(struct str_parms* parms) {
+    char mode[32];
+    char effect_type[32];
 
-    /*
-     * Three/four channel camcorder capture selects its profile from the vendor
-     * effect type, exactly like the stock OplusRecord::getThreeMicProfile().
-     */
-    if (is_builtin && source == AUDIO_SOURCE_CAMCORDER && channels > 2) {
-        static const int32_t kThreeMicProfiles[] = {0, 1, 2, 3, -1, 0, 1};
-        if (effect_type < 0 ||
-            effect_type >= (int32_t)(sizeof(kThreeMicProfiles) / sizeof(kThreeMicProfiles[0]))) {
-            return -1;
-        }
-        return kThreeMicProfiles[effect_type];
+    std::lock_guard<std::mutex> lock(lock_);
+    if (str_parms_get_str(parms, "local_record_mode", mode, sizeof(mode)) >= 0) {
+        scene_ = !strcmp(mode, "interview")    ? oprec::Scene::INTERVIEW
+               : !strcmp(mode, "conference")   ? oprec::Scene::CONFERENCE
+               : !strcmp(mode, "app1")         ? oprec::Scene::APP1
+                                               : oprec::Scene::DEFAULT;
     }
-
-    int32_t profile;
-    if (is_builtin) {
-        if (scene == OPREC_SCENE_INTERVIEW) return 7;
-        if (scene == OPREC_SCENE_CONFERENCE) return 5;
-        switch (source) {
-            case AUDIO_SOURCE_CAMCORDER:
-                profile = 4;
-                break;
-            case AUDIO_SOURCE_VOICE_RECOGNITION:
-                profile = 10;
-                break;
-            default:
-                profile = 1;
-                break;
-        }
-    } else if (is_wired) {
-        if (scene == OPREC_SCENE_INTERVIEW) return 17;
-        if (scene == OPREC_SCENE_CONFERENCE) return 15;
-        switch (source) {
-            case AUDIO_SOURCE_CAMCORDER:
-                profile = 14;
-                break;
-            case AUDIO_SOURCE_VOICE_RECOGNITION:
-                profile = 20;
-                break;
-            default:
-                profile = 11;
-                break;
-        }
-    } else if (is_usb) {
-        if (scene == OPREC_SCENE_INTERVIEW) return 17;
-        if (scene == OPREC_SCENE_CONFERENCE) return 15;
-        switch (source) {
-            case AUDIO_SOURCE_CAMCORDER:
-                profile = 14;
-                break;
-            case AUDIO_SOURCE_VOICE_RECOGNITION:
-                profile = 20;
-                break;
-            default:
-                profile = 21;
-                break;
-        }
-    } else {
-        return -1;
+    if (str_parms_get_str(parms, "vendor_audiorecord_effect_type", effect_type,
+                          sizeof(effect_type)) >= 0 &&
+        effect_type[0] != '\0') {
+        effect_type_ = std::atoi(effect_type);
     }
-
-    /* Scene 7 (app1) at 16 kHz uses the matching *_APP1 profile. */
-    if (scene == OPREC_SCENE_APP1 && sample_rate == 16000) {
-        profile++;
-    }
-
-    return profile;
 }
 
-uint32_t Oprec::getRecordType(pal_stream_type_t type, audio_source_t source, int32_t channels) {
-    uint32_t record_type = 0;
-
-    if (type == PAL_STREAM_LOW_LATENCY || type == PAL_STREAM_ULTRA_LOW_LATENCY) {
-        record_type = 1;
+oprec::Selection Oprec::selectCapture(StreamInPrimary* in) const {
+    oprec::Scene scene;
+    int effect_type;
+    {
+        std::lock_guard<std::mutex> lock(lock_);
+        scene = scene_;
+        effect_type = effect_type_;
     }
 
-    /* The stock HAL only uses the camcorder record types for >2 channels. */
-    if (source == AUDIO_SOURCE_CAMCORDER && channels > 2) {
-        record_type = 3;
+    if (in->mAndroidInDevices.empty()) {
+        return {-1, 0};
     }
 
-    return record_type;
+    return oprec::selectProfile({
+            in->source_,
+            *in->mAndroidInDevices.begin(),
+            in->config_.sample_rate,
+            static_cast<uint32_t>(audio_channel_count_from_in_mask(in->config_.channel_mask)),
+            scene,
+            effect_type,
+            in->streamAttributes_.type == PAL_STREAM_LOW_LATENCY ||
+                    in->streamAttributes_.type == PAL_STREAM_ULTRA_LOW_LATENCY,
+    });
 }
 
 int32_t Oprec::getFormatId(audio_format_t format) {

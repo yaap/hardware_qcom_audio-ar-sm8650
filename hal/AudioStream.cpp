@@ -4970,6 +4970,9 @@ int StreamInPrimary::SetParameters(const char* kvpairs) {
     if (lvacfs.getWrapperOps()) {
         lvacfs.setParameters(parms);
     }
+    if (oprec.getWrapperOps()) {
+        oprec.setParameters(parms);
+    }
     str_parms_destroy(parms);
 exit:
    AHAL_DBG("exit %d", ret);
@@ -5045,10 +5048,10 @@ int StreamInPrimary::Open() {
         (source_ == AUDIO_SOURCE_DEFAULT || source_ == AUDIO_SOURCE_MIC ||
          source_ == AUDIO_SOURCE_CAMCORDER || source_ == AUDIO_SOURCE_VOICE_RECOGNITION)) {
         audio_devices_t device = *mAndroidInDevices.begin();
-        oprec_profile_ = Oprec::getProfile(device, source_, channels, OPREC_SCENE_DEFAULT, -1,
-                                           config_.sample_rate);
+        oprec::Selection selection = oprec.selectCapture(this);
+        oprec_profile_ = selection.profile;
         if (oprec_profile_ >= 0) {
-            oprec_record_type_ = Oprec::getRecordType(streamAttributes_.type, source_, channels);
+            oprec_record_type_ = selection.record_type;
             oprec_active_ = true;
         } else {
             AHAL_INFO("OPREC does not handle device %#x source %d", device, source_);

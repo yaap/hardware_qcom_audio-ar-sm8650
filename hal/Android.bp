@@ -10,6 +10,12 @@ cc_library_headers {
     export_include_dirs: ["lvacfs/default"],
 }
 
+cc_library_headers {
+    name: "liboprec_default_headers",
+    vendor: true,
+    export_include_dirs: ["oprec/default"],
+}
+
 soong_config_module_type {
     name: "target_board_platform_cc_library_shared",
     module_type: "cc_library_shared",
@@ -109,6 +115,9 @@ target_board_platform_cc_library_shared {
     ] + select(soong_config_variable("qtiaudio", "lvacfs_headers"), {
         any @ headers: [headers],
         default: ["liblvacfs_default_headers"],
+    }) + select(soong_config_variable("qtiaudio", "oprec_headers"), {
+        any @ headers: [headers],
+        default: ["liboprec_default_headers"],
     }),
 
     shared_libs: [

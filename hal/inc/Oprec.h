@@ -13,10 +13,12 @@
 
 #include <system/audio.h>
 
+#include "OprecProfileConfig.h"
 #include "PalApi.h"
 #include "PalDefs.h"
 
 class StreamInPrimary;
+struct str_parms;
 
 /*
  * OPLUS AP-side record algorithm (OPREC). The vendor ships a wrapper library
@@ -46,13 +48,6 @@ struct oprec_wrapper_ops {
     int (*get_runtime_para)(void**, int, char*, uint32_t);
 };
 
-enum {
-    OPREC_SCENE_DEFAULT = 0,
-    OPREC_SCENE_INTERVIEW = 1,
-    OPREC_SCENE_CONFERENCE = 2,
-    OPREC_SCENE_APP1 = 7,
-};
-
 class Oprec {
   public:
     static Oprec& getInstance() {
@@ -64,6 +59,9 @@ class Oprec {
 
     void init();
     void deinit();
+
+    /* Recording scene and effect type, mirroring the LVACFS implementation. */
+    void setParameters(struct str_parms* parms);
 
     void startInputStream(StreamInPrimary* in);
     void processInputStream(StreamInPrimary* in, void* buffer, size_t bytes);
@@ -77,15 +75,11 @@ class Oprec {
     void setDeviceOrientation(int orientation);
 
     /*
-     * Ported from the stock OplusRecord::getProfile(). Returns the OPREC
-     * profile id, or -1 when the device/source combination is not handled by
-     * the algorithm.
+     * Builds the capture descriptor for a stream and asks the device profile
+     * header for the vendor profile and record type. The default header
+     * ships the stock OPLUS mapping.
      */
-    static int32_t getProfile(audio_devices_t device, audio_source_t source, int32_t channels,
-                              int32_t scene, int32_t effect_type, uint32_t sample_rate);
-
-    /* Ported from the stock OplusOprecAudrec::algoInit() record type selection. */
-    static uint32_t getRecordType(pal_stream_type_t type, audio_source_t source, int32_t channels);
+    oprec::Selection selectCapture(StreamInPrimary* in) const;
 
     /*
      * Maps an Android PCM format to the format id expected by the wrapper.
@@ -104,6 +98,11 @@ class Oprec {
 
     std::unique_ptr<struct oprec_wrapper_ops> wrapper_ops_;
     const char* params_file_path_;
+
+    /* Recording scene and effect type from the OPLUS recording parameters. */
+    mutable std::mutex lock_;
+    oprec::Scene scene_ = oprec::Scene::DEFAULT;
+    int effect_type_ = -1;
 
     std::mutex streams_lock_;
     std::set<StreamInPrimary*> streams_;
